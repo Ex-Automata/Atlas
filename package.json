@@ -1,0 +1,21 @@
+{
+  "name": "atlas",
+  "displayName": "Atlas - Pathfinder for your code",
+  "description": "Visualize connections between files; highlight refs for selected token.",
+  "version": "0.0.1",
+  "publisher": "you",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onCommand:atlas.open", "onStartupFinished"],
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "atlas.open",
+        "title": "Open Atlas Graph"
+      }
+    ]
+  },
+  "scripts": { "vscode:prepublish": "echo \"no build\"" },
+  "dependencies": {}
+}
