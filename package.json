@@ -12,7 +12,7 @@
     "commands": [
       {
         "command": "atlas.open",
-        "title": "Open Atlas Graph"
+        "title": "Atlas: Open Atlas Graph"
       }
     ]
   },

@@ -142,6 +142,7 @@ function activate(context) {
 function getHtml(webview, extensionUri) {
   const htmlPath = vscode.Uri.joinPath(extensionUri, 'src', 'webview', 'canvas.html');
   const mainJsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'src', 'webview', 'main.js'));
+  const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'src', 'webview', 'canvas.css'));
   const csp = webview.cspSource;
   let html = fs.readFileSync(htmlPath.fsPath, 'utf8');
   // Inject cspSource in meta tag and allow webview resources
@@ -151,8 +152,9 @@ function getHtml(webview, extensionUri) {
     .replace('img-src https: data:', 'img-src ' + csp + ' https: data:')
     .replace('font-src https: data:', 'font-src ' + csp + ' https: data:')
     .replace('connect-src https:', 'connect-src ' + csp + ' https:');
-  // Point script to webview URI
+  // Point resources to webview URIs
   html = html.replace('<script src="./main.js"></script>', '<script src="' + mainJsUri.toString() + '"></script>');
+  html = html.replace('<link rel="stylesheet" href="./canvas.css" />', '<link rel="stylesheet" href="' + cssUri.toString() + '" />');
   return html;
 }
 

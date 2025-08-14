@@ -155,6 +155,7 @@
 
     const editorHost = document.createElement('div');
     editorHost.className = 'editor';
+    editorHost.style.height = '400px';
 
     el.appendChild(head);
     el.appendChild(editorHost);
@@ -340,8 +341,12 @@
         tile.x = t.x; tile.y = t.y; tile.w = t.w; tile.h = t.h; tile.minimized = !!t.minimized;
         el.style.left = tile.x + 'px'; el.style.top = tile.y + 'px';
         el.style.width = (tile.minimized ? (tile.wMin || 220) : (tile.w || 520)) + 'px';
-        if (!tile.minimized) el.style.height = (tile.h || 432) + 'px';
-        if (!tile.minimized) vscode.postMessage({ type: 'loadFile', file: t.file });
+        if (!tile.minimized) {
+          el.style.height = (tile.h || 432) + 'px';
+          const editor = el.querySelector('.editor');
+          if (editor) editor.style.height = ((tile.h || 432) - 32) + 'px';
+          vscode.postMessage({ type: 'loadFile', file: t.file });
+        }
       });
       ensureEmptyPlaceholder();
       queueDrawWires();
