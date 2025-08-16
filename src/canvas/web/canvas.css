@@ -1,0 +1,13 @@
+/* Theme-aware CSS using VS Code CSS variables */
+:root {
+  --bg: var(--vscode-editor-background);
+  --fg: var(--vscode-editor-foreground);
+  --muted: rgba(127,127,127,0.4);
+}
+html, body, #root { height: 100%; margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+#root { position: relative; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; }
+.overlay {
+  position: absolute; right: 8px; top: 8px; padding: 6px 8px; border-radius: 4px;
+  background: rgba(0,0,0,0.18); color: var(--fg); font-size: 12px; backdrop-filter: blur(4px);
+}

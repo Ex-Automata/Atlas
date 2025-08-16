@@ -6,16 +6,68 @@
   "publisher": "you",
   "engines": { "vscode": "^1.90.0" },
   "categories": ["Other"],
-  "activationEvents": ["onCommand:atlas.open", "onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./src/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "atlas.open",
         "title": "Atlas: Open Atlas Graph"
+      },
+      {
+        "command": "atlas.open.empty",
+        "title": "Atlas: Open Empty Graph"
+      },
+      {
+        "command": "atlas.sendToCanvas",
+        "title": "Atlas: Send to Canvas"
       }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "atlas.open",
+          "group": "navigation@10",
+          "when": "resourceExtname =~ /(js|jsx|ts|tsx)$/"
+        },
+        {
+          "command": "atlas.sendToCanvas",
+          "group": "navigation@11"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "atlas.open",
+          "group": "navigation@10",
+          "when": "editorLangId =~ /(javascript|typescript)/"
+        },
+        {
+          "command": "atlas.sendToCanvas",
+          "group": "navigation@11"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "atlas.open",
+          "group": "navigation@10",
+          "when": "resourceExtname =~ /(js|jsx|ts|tsx)$/"
+        },
+        {
+          "command": "atlas.sendToCanvas",
+          "group": "navigation@11"
+        }
+      ]
+    },
+    "keybindings": [
+      { "command": "atlas.open", "key": "ctrl+alt+a", "when": "editorTextFocus" }
     ]
   },
-  "scripts": { "vscode:prepublish": "echo \"no build\"" },
+  "scripts": { 
+    "vscode:prepublish": "echo \"no build\"",
+    "build:webview": "echo \"no bundler configured yet\"",
+    "build": "npm run build:webview"
+  },
   "dependencies": {}
 }
