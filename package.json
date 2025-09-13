@@ -1,6 +1,7 @@
 {
   "name": "atlas",
   "displayName": "Atlas - Pathfinder for your code",
+  "icon": "media/icon.png",
   "description": "Visualize connections between files; highlight refs for selected token.",
   "version": "0.0.1",
   "publisher": "you",
@@ -15,6 +16,10 @@
       {
         "command": "atlas.open",
         "title": "Atlas: Open Atlas Graph"
+      },
+      {
+        "command": "atlas.open.entrypoint",
+        "title": "Atlas: Open Atlas Graph with autodetected entrypoint"
       },
       {
         "command": "atlas.open.empty",

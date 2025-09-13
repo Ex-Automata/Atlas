@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="dark light" />
+        <title>Editor</title>
+
+        <!-- Styles -->
+    <link rel="stylesheet" href="{{EDITOR_CSS}}" />
+
+        <!-- Monaco AMD loader (required before editor.js so it can call require([...])) -->
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.49.0/min/vs/loader.min.js"></script>
+
+        <!-- App logic (implements EditorApp.init and behaviors; see IDs/data-attrs below) -->
+    <script defer src="{{EDITOR_JS}}"></script>
+    </head>
+    <body>
+        <noscript>This page requires JavaScript to load the Monaco editor.</noscript>
+
+        <div
+            id="editor-root"
+            class="editor-shell"
+            data-editor-id="{{EDITOR_ID}}"
+            data-theme="auto"
+            data-language="javascript"
+            data-title="Editor"
+            data-diff="off"
+        >
+            <header class="editor-titlebar" role="toolbar" aria-label="Editor controls">
+                <div class="title" id="editorTitle" title="Editor">Editor</div>
+                <div class="actions">
+                    <button
+                        id="btn-collapse"
+                        class="action"
+                        type="button"
+                        aria-pressed="false"
+                        aria-label="Collapse editor"
+                        title="Collapse"
+                    >
+                        ▾
+                    </button>
+                    <button
+                        id="btn-fullscreen"
+                        class="action"
+                        type="button"
+                        aria-pressed="false"
+                        aria-label="Toggle full screen"
+                        title="Full screen"
+                    >
+                        ⤢
+                    </button>
+                    <button
+                        id="btn-diff"
+                        class="action"
+                        type="button"
+                        aria-pressed="false"
+                        aria-label="Toggle diff view"
+                        title="Diff"
+                    >
+                        ≠
+                    </button>
+                </div>
+            </header>
+
+            <section class="editor-body" aria-live="polite">
+                <!-- Single-editor host -->
+                <div id="monacoContainer" class="editor-pane" role="region" aria-label="Editor"></div>
+
+                <!-- Diff-editor host (hidden by default; toggled by EditorApp) -->
+                <div id="diffContainer" class="diff-pane" role="region" aria-label="Diff editor" hidden></div>
+            </section>
+    <!-- No explicit bootstrap needed; editor.js watches DOM and auto-inits. -->
+        </script>
+    </body>
+</html>

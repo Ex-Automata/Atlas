@@ -1,0 +1,259 @@
+/* Editor styles – theme-aware (auto/light/dark) and accessible */
+
+/* Scope all styling to the editor container to avoid affecting the host page */
+/* Base */
+.editor-shell, .editor-shell * {
+	box-sizing: border-box;
+}
+
+.editor-shell {
+	font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+		Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji",
+		"Segoe UI Emoji";
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	color: var(--fg);
+	background: var(--bg);
+	pointer-events: auto; /* allow interaction */
+}
+
+/* Theme tokens */
+.editor-shell {
+	/* Light defaults */
+	--bg: #ffffff;
+	--bg-elev: #f6f8fa;
+	--fg: #24292f;
+	--muted: #57606a;
+	--border: #d0d7de;
+	--accent: #0969da;
+	--accent-contrast: #ffffff;
+	--danger: #cf222e;
+	--shadow: 0 1px 2px rgba(27, 31, 36, 0.06), 0 2px 4px rgba(27, 31, 36, 0.06);
+	--focus: 0 0 0 2px color-mix(in oklab, var(--accent) 35%, transparent);
+	--radius: 8px;
+	--radius-sm: 6px;
+	--titlebar-h: 42px;
+}
+
+/* Explicit theme: light */
+.editor-shell[data-theme="light"] {
+	--bg: #ffffff;
+	--bg-elev: #f6f8fa;
+	--fg: #24292f;
+	--muted: #57606a;
+	--border: #d0d7de;
+	--accent: #0969da;
+	--accent-contrast: #ffffff;
+	--danger: #cf222e;
+	--shadow: 0 1px 2px rgba(27, 31, 36, 0.06), 0 2px 4px rgba(27, 31, 36, 0.06);
+}
+
+/* Explicit theme: dark */
+.editor-shell[data-theme="dark"] {
+	--bg: #0d1117;
+	--bg-elev: #161b22;
+	--fg: #c9d1d9;
+	--muted: #8b949e;
+	--border: #30363d;
+	--accent: #2f81f7;
+	--accent-contrast: #0d1117;
+	--danger: #ff7b72;
+	--shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* Auto theme uses prefers-color-scheme to override defaults (see media query below) */
+
+@media (prefers-color-scheme: dark) {
+	.editor-shell[data-theme="auto"] {
+		--bg: #0d1117;
+		--bg-elev: #161b22;
+		--fg: #c9d1d9;
+		--muted: #8b949e;
+		--border: #30363d;
+		--accent: #2f81f7;
+		--accent-contrast: #0d1117;
+		--danger: #ff7b72;
+		--shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.35);
+	}
+}
+
+/* Container layout */
+.editor-shell {
+	height: 100%;
+	max-height: 100%;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	overflow: clip;
+}
+
+/* Make the shell full-bleed when window provides no outer padding */
+/* Avoid changing host page padding/background; container already styled */
+
+/* Titlebar */
+.editor-titlebar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	height: var(--titlebar-h);
+	padding: 0 8px 0 12px;
+	background: var(--bg-elev);
+	border-bottom: 1px solid var(--border);
+}
+
+.editor-titlebar .title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--fg);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.editor-titlebar .actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.editor-titlebar .action {
+	appearance: none;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-elev) 70%, transparent);
+	color: var(--fg);
+	padding: 4px 8px;
+	height: 28px;
+	line-height: 1;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.editor-titlebar .action:hover {
+	background: color-mix(in oklab, var(--bg-elev) 85%, transparent);
+}
+
+.editor-titlebar .action:active {
+	background: color-mix(in oklab, var(--bg-elev) 60%, transparent);
+}
+
+.editor-titlebar .action[aria-pressed="true"] {
+	border-color: color-mix(in oklab, var(--accent) 50%, var(--border));
+	background: color-mix(in oklab, var(--accent) 18%, var(--bg-elev));
+	color: var(--fg);
+}
+
+.editor-titlebar .action:focus-visible {
+	outline: none;
+	box-shadow: var(--focus);
+}
+
+/* Body and panes */
+.editor-body {
+	position: relative;
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0; /* allow children to size via flex */
+	background: var(--bg);
+}
+
+.editor-pane,
+.diff-pane {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	width: 100%;
+	height: calc(100% - var(--titlebar-h));
+}
+
+/* Hidden by default via [hidden]; allow toggling via data-attr */
+#diffContainer[hidden] {
+	display: none !important;
+}
+
+/* Diff toggle: when data-diff="on" show diff and hide single-editor */
+[data-diff="on"] #monacoContainer {
+	display: none !important;
+}
+
+[data-diff="on"] #diffContainer {
+	display: block !important;
+}
+
+/* Collapsed state: collapse body when collapse button is toggled */
+.editor-shell:has(#btn-collapse[aria-pressed="true"]) .editor-body {
+	display: none;
+}
+
+.editor-shell:has(#btn-collapse[aria-pressed="true"]) {
+	border-bottom-left-radius: var(--radius);
+	border-bottom-right-radius: var(--radius);
+}
+
+/* Fullscreen state: when fullscreen button is toggled */
+.editor-shell:has(#btn-fullscreen[aria-pressed="true"]) {
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	margin: 0 !important;
+	max-height: none;
+	border-radius: 0;
+}
+
+/* High-contrast improvements via forced-colors */
+@media (forced-colors: active) {
+	.editor-shell {
+		--border: CanvasText;
+		--fg: CanvasText;
+		--bg: Canvas;
+		--bg-elev: Canvas;
+		--accent: Highlight;
+		--accent-contrast: HighlightText;
+	}
+	.editor-titlebar .action {
+		forced-color-adjust: none;
+		border-color: var(--border);
+	}
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+	.editor-shell * {
+		transition: none !important;
+		animation: none !important;
+	}
+}
+
+/* Scrollbar polish (Chromium/WebKit) */
+.editor-shell *::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+.editor-shell *::-webkit-scrollbar-thumb {
+	background: color-mix(in oklab, var(--fg) 20%, transparent);
+	border: 2px solid transparent;
+	border-radius: 999px;
+	background-clip: padding-box;
+}
+
+.editor-shell *::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--fg) 30%, transparent);
+}
+
+/* Space for Monaco to occupy entire pane */
+#monacoContainer,
+#diffContainer {
+	position: relative;
+}
+
+/* Optional: titlebar danger state if needed on future buttons */
+.action.is-danger,
+.action[aria-label*="Delete" i] {
+	border-color: color-mix(in oklab, var(--danger) 40%, var(--border));
+	background: color-mix(in oklab, var(--danger) 12%, var(--bg-elev));
+}
+

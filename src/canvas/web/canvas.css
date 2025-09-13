@@ -7,6 +7,20 @@
 html, body, #root { height: 100%; margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
 #root { position: relative; overflow: hidden; }
 canvas { display: block; width: 100%; height: 100%; }
+.overlay { pointer-events: none; }
+
+/* World DOM layer that follows pan/zoom */
+#world {
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  pointer-events: none; /* child widgets can opt-in to events */
+}
+
+/* Generic widget host inside world; opt-in to pointer events */
+.widget {
+  position: absolute;
+  pointer-events: auto;
+}
 .overlay {
   position: absolute; right: 8px; top: 8px; padding: 6px 8px; border-radius: 4px;
   background: rgba(0,0,0,0.18); color: var(--fg); font-size: 12px; backdrop-filter: blur(4px);
