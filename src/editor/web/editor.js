@@ -1,15 +1,12 @@
 (function () {
-    console.log("DEBUG: <anonymous>");
     const CDN_BASE =
         "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.49.0/min";
     /** @type {import('monaco-editor')} */ let monaco = undefined;
 
     function loadMonacoOnce() {
-        console.log("DEBUG: loadMonacoOnce");
         if (monaco) return Promise.resolve();
         const ensureLoader = () =>
             new Promise((resolve, reject) => {
-                console.log("DEBUG: ensureLoader");
                 if (window.require && window.require.config) return resolve();
                 // Dynamically load AMD loader from CDN if not present
                 const src = `${CDN_BASE}/vs/loader.min.js`;
@@ -21,11 +18,9 @@
                 s.src = src;
                 s.defer = true;
                 s.onload = () => {
-                    console.log("DEBUG: loaderOnload");
                     resolve();
                 };
                 s.onerror = (e) => {
-                    console.log("DEBUG: loaderOnerror");
                     reject(new Error("Failed to load AMD loader"));
                 };
                 document.head.appendChild(s);
@@ -33,12 +28,10 @@
         return ensureLoader().then(
             () =>
                 new Promise((resolve, reject) => {
-                    console.log("DEBUG: configureMonacoRequire");
                     if (!(window.require && window.require.config))
                         return reject(new Error("AMD loader not available"));
                     window.MonacoEnvironment = {
                         getWorkerUrl: () => {
-                            console.log("DEBUG: getWorkerUrl");
                             const blob = new Blob(
                                 [
                                     `self.MonacoEnvironment = { baseUrl: '${CDN_BASE}/' };\n` +
@@ -53,12 +46,10 @@
                     window.require(
                         ["vs/editor/editor.main"],
                         (m) => {
-                            console.log("DEBUG: requireCallback");
                             monaco = m;
                             resolve();
                         },
                         (err) => {
-                            console.log("DEBUG: requireError");
                             reject(err);
                         }
                     );
@@ -70,7 +61,6 @@
     const registry = new Map();
 
     function getEditor(id) {
-        console.log("DEBUG: getEditor");
         if (!id) return null;
         if (registry.has(id)) return registry.get(id);
         const esc =
@@ -90,7 +80,6 @@
 
     // Global message router: dispatch to the addressed instance by id
     window.addEventListener("message", (ev) => {
-        console.log("DEBUG: windowMessageHandler");
         const msg = ev.data;
         if (!msg || !msg.id || !msg.type) return;
         const inst = getEditor(msg.id);
@@ -98,7 +87,6 @@
     });
 
     function createInstance(root) {
-        console.log("DEBUG: createInstance");
         const rid = root.getAttribute("data-editor-id");
         root.setAttribute("data-editor-id", rid);
         const els = {
@@ -114,6 +102,8 @@
             id: rid,
             initialized: false,
             collapsed: false,
+            // Tri-state: 0 = titlebar only (unloaded), 1 = 20-line preview, 2 = full (all lines)
+            collapseState: 2,
             fullscreen: false,
             diff: (ds.diff || "off") === "on",
             language: ds.language || "plaintext",
@@ -124,7 +114,7 @@
             modified: "",
         };
         // Wire control buttons
-        els.btnCollapse?.addEventListener("click", () => toggleCollapse());
+        els.btnCollapse?.addEventListener("click", () => cycleCollapse());
         els.btnFullscreen?.addEventListener("click", () => toggleFullscreen());
         els.btnDiff?.addEventListener("click", () => toggleDiff());
 
@@ -136,9 +126,9 @@
         const models = { single: null, original: null, modified: null };
         const disposables = [];
         let resizeObserver = null;
+    let heightRaf = 0;
 
         function post(msg) {
-            console.log("DEBUG: post", msg);
             try {
                 if (msg && typeof msg === "object" && msg.id == null)
                     msg.id = state.id;
@@ -146,7 +136,6 @@
             } catch {}
         }
         function applyTheme() {
-            console.log("DEBUG: applyTheme");
             const containerTheme =
                 root.getAttribute("data-theme") || state.theme || "auto";
             const prefersDark =
@@ -163,13 +152,11 @@
             state.theme = containerTheme;
         }
         function disposeModel(kind) {
-            console.log("DEBUG: disposeModel");
             const m = models[kind];
             if (m && !m.isDisposed()) m.dispose();
             models[kind] = null;
         }
         function ensureSingleModel() {
-            console.log("DEBUG: ensureSingleModel");
             if (models.single && !models.single.isDisposed())
                 return models.single;
             const uri = state.modelUri
@@ -183,7 +170,6 @@
             return models.single;
         }
         function ensureDiffModels() {
-            console.log("DEBUG: ensureDiffModels");
             const make = (text, label) =>
                 monaco.editor.createModel(
                     text || "",
@@ -198,12 +184,76 @@
             return { original: models.original, modified: models.modified };
         }
         function layout() {
-            console.log("DEBUG: layout");
             if (editor) editor.layout();
             if (diffEditor) diffEditor.layout();
         }
+        function getWrapper() {
+            // editor root is inside the canvas wrapper (editor-host)
+            return root && root.parentElement ? root.parentElement : root;
+        }
+        function titlebarHeight() {
+            const tb = root.querySelector(".editor-titlebar");
+            return (tb && tb.offsetHeight) || 42;
+        }
+        function getActiveEditorForMetrics() {
+            if (state.diff && diffEditor && !diffEditor._disposed) {
+                return (
+                    (typeof diffEditor.getModifiedEditor === "function" &&
+                        diffEditor.getModifiedEditor()) || editor
+                );
+            }
+            return editor;
+        }
+        function getLineHeight() {
+            try {
+                const ed = getActiveEditorForMetrics();
+                if (ed && monaco && monaco.editor && monaco.editor.EditorOption)
+                    return (
+                        ed.getOption(monaco.editor.EditorOption.lineHeight) || 20
+                    );
+            } catch {}
+            return 20;
+        }
+        function scheduleHeightApply() {
+            if (heightRaf) cancelAnimationFrame(heightRaf);
+            heightRaf = requestAnimationFrame(() => {
+                heightRaf = 0;
+                if (state.collapseState === 0) setWrapperHeightTitlebarOnly();
+                else if (state.collapseState === 1) setWrapperHeightForLines(20);
+                else setWrapperHeightForLines(Math.max(1, getVisibleLineCount()));
+            });
+        }
+        function getVisibleLineCount() {
+            try {
+                if (state.diff && diffEditor && !diffEditor._disposed) {
+                    const m = diffEditor.getModel();
+                    const a = m?.original?.getLineCount?.() || 0;
+                    const b = m?.modified?.getLineCount?.() || 0;
+                    return Math.max(a, b) || 0;
+                }
+                if (editor && !editor._disposed) {
+                    const m = editor.getModel?.();
+                    return (m && m.getLineCount && m.getLineCount()) || 0;
+                }
+            } catch {}
+            return 0;
+        }
+        function setWrapperHeightForLines(lines) {
+            const wrap = getWrapper();
+            if (!wrap) return;
+            const lh = getLineHeight();
+            const extra = 16; // scrollbar/padding allowance
+            const h = Math.max(0, Math.floor(lines * lh + titlebarHeight() + extra));
+            wrap.style.height = `${h}px`;
+            requestAnimationFrame(layout);
+        }
+        function setWrapperHeightTitlebarOnly() {
+            const wrap = getWrapper();
+            if (!wrap) return;
+            wrap.style.height = `${titlebarHeight()}px`;
+            requestAnimationFrame(layout);
+        }
         function createEditorIfNeeded() {
-            console.log("DEBUG: createEditorIfNeeded");
             if (state.collapsed) return;
             if (state.diff) {
                 disposeEditor("single");
@@ -222,7 +272,6 @@
                     const modModel = diffEditor.getModel()?.modified;
                     if (modModel) {
                         const sub = modModel.onDidChangeContent(() => {
-                            console.log("DEBUG: diffModified_onDidChangeContent");
                             try {
                                 const val = modModel.getValue();
                                 state.modified = val;
@@ -246,10 +295,10 @@
                         wordWrap: "off",
                     });
                     const sub = editor.onDidChangeModelContent(() => {
-                        console.log("DEBUG: editor_onDidChangeModelContent");
                         const val = editor.getValue();
                         state.content = val;
                         post({ type: "change", value: val });
+                        if (state.collapseState === 2) scheduleHeightApply();
                     });
                     disposables.push(sub);
                 }
@@ -257,7 +306,6 @@
             layout();
         }
         function disposeEditor(which) {
-            console.log("DEBUG: disposeEditor");
             if (which === "single" || which === "all") {
                 if (editor && !editor._disposed) {
                     try {
@@ -288,7 +336,6 @@
             }
         }
         function toggleCollapse(force) {
-            console.log("DEBUG: toggleCollapse");
             const next = typeof force === "boolean" ? force : !state.collapsed;
             state.collapsed = next;
             els.btnCollapse?.setAttribute("aria-pressed", String(next));
@@ -296,8 +343,35 @@
             else createEditorIfNeeded();
             post({ type: "collapsed", value: next });
         }
+
+        function applyCollapseState() {
+            // 0 = titlebar only (unloaded)
+            // 1 = 20-line preview
+            // 2 = full height (all lines)
+            const s = state.collapseState;
+            if (s === 0) {
+                // collapse/unload and shrink wrapper to titlebar height
+                toggleCollapse(true);
+                setWrapperHeightTitlebarOnly();
+                return;
+            }
+            // ensure expanded and editor created for 1 or 2
+            toggleCollapse(false);
+            createEditorIfNeeded();
+            if (s === 1) {
+                setWrapperHeightForLines(20);
+            } else {
+                const lc = Math.max(1, getVisibleLineCount());
+                setWrapperHeightForLines(lc);
+            }
+        }
+
+        function cycleCollapse() {
+            // Cycle 0 -> 1 -> 2 -> 0
+            state.collapseState = (state.collapseState + 1) % 3;
+            applyCollapseState();
+        }
         function toggleFullscreen(force) {
-            console.log("DEBUG: toggleFullscreen");
             const next = typeof force === "boolean" ? force : !state.fullscreen;
             state.fullscreen = next;
             els.btnFullscreen?.setAttribute("aria-pressed", String(next));
@@ -305,7 +379,6 @@
             post({ type: "fullscreen", value: next });
         }
         function toggleDiff(force) {
-            console.log("DEBUG: toggleDiff");
             const next = typeof force === "boolean" ? force : !state.diff;
             if (state.diff === next) return;
             state.diff = next;
@@ -320,19 +393,19 @@
             }
             disposeEditor("all");
             createEditorIfNeeded();
+            scheduleHeightApply();
             post({ type: "diff", value: next });
         }
         function setValue(text) {
-            console.log("DEBUG: setValue");
             state.content = text || "";
             if (editor && !state.diff) editor.setValue(state.content);
             else if (state.diff && diffEditor) {
                 const m = diffEditor.getModel();
                 if (m?.modified) m.modified.setValue(state.content);
             }
+            scheduleHeightApply();
         }
         function getValue() {
-            console.log("DEBUG: getValue");
             if (editor && !state.diff) return editor.getValue();
             if (state.diff && diffEditor) {
                 const m = diffEditor.getModel();
@@ -341,7 +414,6 @@
             return state.content || "";
         }
         function setDiff(original, modified) {
-            console.log("DEBUG: setDiff");
             state.original = original || "";
             state.modified = modified || "";
             if (!state.diff) toggleDiff(true);
@@ -352,7 +424,6 @@
             }
         }
         function setLanguage(lang) {
-            console.log("DEBUG: setLanguage");
             state.language = lang || state.language;
             const apply = (m) =>
                 m &&
@@ -363,19 +434,16 @@
             apply(models.modified);
         }
         function setTitle(title) {
-            console.log("DEBUG: setTitle");
             if (els.title) {
                 els.title.textContent = title;
                 els.title.title = title;
             }
         }
         function setTheme(theme) {
-            console.log("DEBUG: setTheme");
             root.setAttribute("data-theme", theme);
             applyTheme();
         }
         function onMessage(msg) {
-            console.log("DEBUG: onMessage");
             if (!msg || typeof msg !== "object") return;
             if (msg.id != null && msg.id !== state.id) return;
             switch (msg.type) {
@@ -418,7 +486,6 @@
             }
         }
         function dispose() {
-            console.log("DEBUG: dispose");
             disposeEditor("all");
             try {
                 resizeObserver?.disconnect();
@@ -427,22 +494,16 @@
         }
 
         // Wire control buttons
-        els.btnCollapse?.addEventListener("click", () => {
-            console.log("DEBUG: btnCollapse_click");
-            return toggleCollapse();
-        });
+    // (re-wire above) collapse handled by cycleCollapse
         els.btnFullscreen?.addEventListener("click", () => {
-            console.log("DEBUG: btnFullscreen_click");
             return toggleFullscreen();
         });
         els.btnDiff?.addEventListener("click", () => {
-            console.log("DEBUG: btnDiff_click");
             return toggleDiff();
         });
 
         // Observe theme attribute
         new MutationObserver(() => {
-            console.log("DEBUG: themeMutationObserver");
             applyTheme();
         }).observe(root, {
             attributes: true,
@@ -452,23 +513,21 @@
         // Build after monaco
         loadMonacoOnce()
             .then(() => {
-                console.log("DEBUG: loadMonacoOnce_then");
                 applyTheme();
                 createEditorIfNeeded();
                 attachResize();
                 state.initialized = true;
                 post({ type: "ready" });
+                // apply initial collapse mode (full by default)
+                applyCollapseState();
             })
             .catch((err) => {
-                console.log("DEBUG: loadMonacoOnce_catch");
                 console.error("Failed to load Monaco", err);
                 post({ type: "error", error: String(err) });
             });
 
         function attachResize() {
-            console.log("DEBUG: attachResize");
             resizeObserver = new ResizeObserver(() => {
-                console.log("DEBUG: resizeObserverCallback");
                 layout();
             });
             resizeObserver.observe(root);
@@ -487,6 +546,7 @@
             setTheme,
             setTitle,
             toggleCollapse,
+            cycleCollapse,
             toggleDiff,
             toggleFullscreen,
             dispose,
@@ -498,7 +558,6 @@
 
     // Auto-initialize editors present in DOM, and any added later
     function initShell(root) {
-        console.log("DEBUG: initShell");
         if (!root) return null;
         const idAttr =
             root.getAttribute("data-editor-id") ||
@@ -511,17 +570,14 @@
     }
 
     function initAllEditorsIn(container = document) {
-        console.log("DEBUG: initAllEditorsIn");
         const nodes = container.querySelectorAll(".editor-shell");
         for (const n of nodes) initShell(n);
     }
 
     function start() {
-        console.log("DEBUG: start");
         initAllEditorsIn(document);
         // watch for dynamically added editor-shells
         const mo = new MutationObserver((muts) => {
-            console.log("DEBUG: initMutationObserver");
             for (const m of muts) {
                 if (m.type !== "childList") continue;
                 m.addedNodes?.forEach((node) => {

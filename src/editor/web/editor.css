@@ -166,7 +166,7 @@
 	min-width: 0;
 	min-height: 0;
 	width: 100%;
-	height: calc(100% - var(--titlebar-h));
+	height: 100%; 
 }
 
 /* Hidden by default via [hidden]; allow toggling via data-attr */
