@@ -10,3 +10,6 @@ dist/
 npm-debug.log*
 yarn-error.log*
 .env
+
+
+.atlas-debug/

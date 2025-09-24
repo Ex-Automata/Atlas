@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { RelationshipManager } = require("../graph/RelationshipManager");
 
 // Per-editor bridge. Lifecycle tied to an editor id.
 class EditorBridge {
@@ -18,6 +19,7 @@ class EditorBridge {
         this.diff = false;
         this.collapsed = false;
         this.fullscreen = false;
+        this.graph = null;
         this.handlers = {
             ready: new Set(),
             change: new Set(),
@@ -102,6 +104,19 @@ class EditorBridge {
         });
         this.dirty = false;
         this.content = value;
+
+        // Load/update the language graph for this file (log to console for now)
+        try {
+            RelationshipManager.collectAndLogLspInfo(this.filePath)
+            //RelationshipManager.loadGraph(this.filePath, language).
+            
+            //then((graph) => {
+            //    this.graph = graph;
+            //    this.parentCanvas.editorManager.loadNeighbors(graph);
+            //});
+        } catch (e) {
+            console.warn("[Atlas] setLanguage: failed to load graph", e);
+        }
     }
     toggleDiff(v) {
         this._send({ type: "toggleDiff", value: v });

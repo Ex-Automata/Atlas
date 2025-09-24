@@ -30,9 +30,16 @@ function createEditorManager(parentCanvas) {
         return editors.get(filePath);
     }
 
+    function loadNeighbors(graph) {
+        for (const imp of graph.imports || []) {
+            const neighbor = getEditor(imp);
+        }
+    }
+
     return {
         getEditor,
         listEditors: () => Array.from(editors.values()),
+        loadNeighbors
     };
 }
 
