@@ -120,6 +120,13 @@
             return { tx, ty, scale };
         }
 
+        function reset() {
+            tx = 0;
+            ty = 0;
+            scale = 1;
+            CanvasRenderer.draw();
+        }
+
         // mouse pan state
         let mouseDragging = false;
         let lastMouse = { x: 0, y: 0 };
@@ -290,6 +297,7 @@
             panBy,
             toWorld,
             getTransform,
+            reset,
         };
     })();
 
@@ -367,7 +375,13 @@
             } catch (err) {
                 console.error("Failed to displayHtml", err);
             }
+        } else if (msg.type === "resetViewport") {
+            CanvasNav.reset();
         }
+    });
+
+    window.addEventListener("atlas:resetViewport", () => {
+        CanvasNav.reset();
     });
 
     // Drag & drop files: forward file paths to the extension host for now

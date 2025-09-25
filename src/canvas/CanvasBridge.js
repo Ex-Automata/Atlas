@@ -71,6 +71,37 @@ class CanvasBridge {
                         );
                     }
                 }
+            } else if (msg && msg.type === "resetViewport") {
+                console.log("[CanvasBridge] Viewport reset requested from action bar");
+            } else if (msg && msg.type === "actionBarState") {
+                console.log(
+                    "[CanvasBridge] Action bar",
+                    msg.open ? "opened" : "closed",
+                    "actions=",
+                    Array.isArray(msg.actions) ? msg.actions.join(", ") : msg.actions
+                );
+            } else if (msg && msg.type === "actionBarToggle") {
+                console.log(
+                    "[CanvasBridge] Action bar toggle clicked",
+                    `wasOpen=${msg.wasOpen}`,
+                    `willOpen=${msg.willOpen}`
+                );
+            } else if (msg && msg.type === "actionBarReady") {
+                console.log(
+                    "[CanvasBridge] Action bar ready",
+                    msg.hasReset ? "(reset button detected)" : "(reset button missing)"
+                );
+            } else if (msg && msg.type === "actionBarRegistered") {
+                console.log(
+                    "[CanvasBridge] Action registered",
+                    msg.actionId,
+                    msg.label ? `(${msg.label})` : ""
+                );
+            } else if (msg && msg.type === "actionBarUnregistered") {
+                console.log(
+                    "[CanvasBridge] Action unregistered",
+                    msg.actionId
+                );
             }
         });
     }
@@ -106,6 +137,12 @@ function buildHtmlFromIndex(webview, extensionUri) {
     const editorScriptUri = webview.asWebviewUri(
         vscode.Uri.joinPath(editorBase, "editor.js")
     );
+    const sidebarStyleUri = webview.asWebviewUri(
+        vscode.Uri.joinPath(basePath, "sidebar.css")
+    );
+    const sidebarScriptUri = webview.asWebviewUri(
+        vscode.Uri.joinPath(basePath, "sidebar.js")
+    );
     const canvasUri = vscode.Uri.joinPath(basePath, "canvas.html");
     const cspSource = webview.cspSource;
 
@@ -131,7 +168,9 @@ function buildHtmlFromIndex(webview, extensionUri) {
             .replace(/\{\{CANVAS_CSS\}\}/g, String(styleUri))
             .replace(/\{\{CANVAS_JS\}\}/g, String(scriptUri))
             .replace(/\{\{EDITOR_CSS\}\}/g, String(editorStyleUri))
-            .replace(/\{\{EDITOR_JS\}\}/g, String(editorScriptUri));
+            .replace(/\{\{EDITOR_JS\}\}/g, String(editorScriptUri))
+            .replace(/\{\{SIDEBAR_CSS\}\}/g, String(sidebarStyleUri))
+            .replace(/\{\{SIDEBAR_JS\}\}/g, String(sidebarScriptUri));
         return html;
     });
 }

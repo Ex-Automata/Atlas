@@ -13,8 +13,34 @@
             src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.49.0/min/vs/loader.min.js"
         ></script>
     <script defer src="{{EDITOR_JS}}"></script>
+    <link rel="stylesheet" href="{{SIDEBAR_CSS}}">
+    <script defer src="{{SIDEBAR_JS}}"></script>
     </head>
     <body>
+        <div
+            id="actionBar"
+            class="action-bar"
+            role="toolbar"
+            aria-label="Quick actions"
+            aria-expanded="false"
+        >
+            <button
+                id="actionBarHandle"
+                class="action-bar__handle"
+                type="button"
+                aria-label="Toggle quick actions"
+                aria-expanded="false"
+            >
+                <span class="action-bar__handle-icon" aria-hidden="true"></span>
+                <span class="action-bar__handle-label">ACTIONS</span>
+            </button>
+            <div
+                id="actionBarItems"
+                class="action-bar__items"
+                role="group"
+                aria-label="Canvas quick actions"
+            ></div>
+        </div>
         <div id="root">
             <canvas id="canvas"></canvas>
             <div id="world" aria-label="Canvas objects layer"></div>
