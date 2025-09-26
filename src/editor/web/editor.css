@@ -257,3 +257,94 @@
 	background: color-mix(in oklab, var(--danger) 12%, var(--bg-elev));
 }
 
+/* Atlas LSP Highlighting Styles */
+.atlas-editor-highlights {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	pointer-events: none;
+	z-index: 5;
+}
+
+.atlas-editor-highlight {
+	position: absolute;
+	pointer-events: none;
+	z-index: 10;
+	border-radius: 2px;
+	transition: opacity 0.2s ease;
+}
+
+/* Definition highlights - green theme */
+.atlas-highlight-definitions {
+	background-color: color-mix(in oklab, #28a745 20%, transparent);
+	border: 1px solid color-mix(in oklab, #28a745 50%, transparent);
+}
+
+/* Reference highlights - blue theme */
+.atlas-highlight-references {
+	background-color: color-mix(in oklab, #007bff 20%, transparent);
+	border: 1px solid color-mix(in oklab, #007bff 50%, transparent);
+}
+
+/* Document highlight - yellow theme */
+.atlas-highlight-highlight,
+.atlas-highlight-documentHighlights {
+	background-color: color-mix(in oklab, #ffc107 30%, transparent);
+	border: 1px solid color-mix(in oklab, #ffc107 60%, transparent);
+}
+
+/* Implementation highlights - purple theme */
+.atlas-highlight-implementations {
+	background-color: color-mix(in oklab, #6f42c1 20%, transparent);
+	border: 1px solid color-mix(in oklab, #6f42c1 50%, transparent);
+}
+
+/* Type definition highlights - orange theme */
+.atlas-highlight-typeDefinitions {
+	background-color: color-mix(in oklab, #fd7e14 20%, transparent);
+	border: 1px solid color-mix(in oklab, #fd7e14 50%, transparent);
+}
+
+/* Generic highlights - gray theme */
+.atlas-highlight-default {
+	background-color: color-mix(in oklab, var(--muted) 20%, transparent);
+	border: 1px solid color-mix(in oklab, var(--muted) 50%, transparent);
+}
+
+/* Dark theme overrides */
+@media (prefers-color-scheme: dark) {
+	.editor-shell[data-theme="auto"] .atlas-highlight-definitions {
+		background-color: color-mix(in oklab, #34ce57 25%, transparent);
+		border-color: color-mix(in oklab, #34ce57 60%, transparent);
+	}
+	
+	.editor-shell[data-theme="auto"] .atlas-highlight-references {
+		background-color: color-mix(in oklab, #1f9bcf 25%, transparent);
+		border-color: color-mix(in oklab, #1f9bcf 60%, transparent);
+	}
+	
+	.editor-shell[data-theme="auto"] .atlas-highlight-highlight,
+	.editor-shell[data-theme="auto"] .atlas-highlight-documentHighlights {
+		background-color: color-mix(in oklab, #f1c232 35%, transparent);
+		border-color: color-mix(in oklab, #f1c232 70%, transparent);
+	}
+}
+
+.editor-shell[data-theme="dark"] .atlas-highlight-definitions {
+	background-color: color-mix(in oklab, #34ce57 25%, transparent);
+	border-color: color-mix(in oklab, #34ce57 60%, transparent);
+}
+
+.editor-shell[data-theme="dark"] .atlas-highlight-references {
+	background-color: color-mix(in oklab, #1f9bcf 25%, transparent);
+	border-color: color-mix(in oklab, #1f9bcf 60%, transparent);
+}
+
+.editor-shell[data-theme="dark"] .atlas-highlight-highlight,
+.editor-shell[data-theme="dark"] .atlas-highlight-documentHighlights {
+	background-color: color-mix(in oklab, #f1c232 35%, transparent);
+	border-color: color-mix(in oklab, #f1c232 70%, transparent);
+}
+

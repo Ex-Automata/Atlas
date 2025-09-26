@@ -310,6 +310,17 @@
     // initial size
     requestAnimationFrame(CanvasRenderer.resize);
 
+    // Register with GraphCoordinator for canvas links
+    requestAnimationFrame(() => {
+        const canvasRoot = document.getElementById("root");
+        if (canvasRoot && window.postMessage) {
+            window.postMessage({
+                type: 'atlas:canvasRegistered',
+                canvasRoot: true
+            }, '*');
+        }
+    });
+
     // No explicit canvasReady handshake is required; assets are statically included.
 
     // listen for messages from extension host

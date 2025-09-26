@@ -22,6 +22,24 @@
         let editorHighlightsEnabled = true;
         let canvasLinksEnabled = true;
 
+        // Register canvas root when available
+        const canvasRoot = document.getElementById("root");
+        if (canvasRoot) {
+            // Simple canvas link layer implementation for webview
+            window.AtlasCanvasLinkLayer = {
+                enabled: canvasLinksEnabled,
+                setEnabled: (enabled) => {
+                    canvasLinksEnabled = enabled;
+                    const linkLayers = document.querySelectorAll('.atlas-canvas-links');
+                    linkLayers.forEach(layer => {
+                        layer.style.display = enabled ? '' : 'none';
+                    });
+                }
+            };
+            
+            console.log("[Atlas] Canvas registered with GraphCoordinator");
+        }
+
         // Register editor highlights toggle
         window.AtlasActionBar.registerAction("editorHighlights", {
             label: "Editor highlights",
@@ -56,11 +74,10 @@
             onSelect: () => {
                 canvasLinksEnabled = !canvasLinksEnabled;
                 
-                // Toggle visibility of SVG link layer
-                const linkLayers = document.querySelectorAll('.atlas-canvas-links');
-                linkLayers.forEach(layer => {
-                    layer.style.display = canvasLinksEnabled ? '' : 'none';
-                });
+                // Update canvas link layer
+                if (window.AtlasCanvasLinkLayer) {
+                    window.AtlasCanvasLinkLayer.setEnabled(canvasLinksEnabled);
+                }
                 
                 console.log(`[Atlas] Canvas links ${canvasLinksEnabled ? 'enabled' : 'disabled'}`);
                 
