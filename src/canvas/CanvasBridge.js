@@ -125,6 +125,7 @@ class CanvasBridge {
 function buildHtmlFromIndex(webview, extensionUri) {
     const basePath = vscode.Uri.joinPath(extensionUri, "src", "canvas", "web");
     const editorBase = vscode.Uri.joinPath(extensionUri, "src", "editor", "web");
+    const graphBase = vscode.Uri.joinPath(extensionUri, "src", "graph", "web");
     const styleUri = webview.asWebviewUri(
         vscode.Uri.joinPath(basePath, "canvas.css")
     );
@@ -142,6 +143,9 @@ function buildHtmlFromIndex(webview, extensionUri) {
     );
     const sidebarScriptUri = webview.asWebviewUri(
         vscode.Uri.joinPath(basePath, "sidebar.js")
+    );
+    const graphCoordinatorUri = webview.asWebviewUri(
+        vscode.Uri.joinPath(graphBase, "GraphCoordinator.js")
     );
     const canvasUri = vscode.Uri.joinPath(basePath, "canvas.html");
     const cspSource = webview.cspSource;
@@ -170,7 +174,8 @@ function buildHtmlFromIndex(webview, extensionUri) {
             .replace(/\{\{EDITOR_CSS\}\}/g, String(editorStyleUri))
             .replace(/\{\{EDITOR_JS\}\}/g, String(editorScriptUri))
             .replace(/\{\{SIDEBAR_CSS\}\}/g, String(sidebarStyleUri))
-            .replace(/\{\{SIDEBAR_JS\}\}/g, String(sidebarScriptUri));
+            .replace(/\{\{SIDEBAR_JS\}\}/g, String(sidebarScriptUri))
+            .replace(/\{\{GRAPH_COORDINATOR_JS\}\}/g, String(graphCoordinatorUri));
         return html;
     });
 }

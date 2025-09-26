@@ -1,5 +1,5 @@
 const vscode = require("vscode");
-const { RelationshipManager } = require("../graph/RelationshipManager");
+const { RelationshipManager } = require("../graph/GraphCoordinator");
 
 // Per-editor bridge. Lifecycle tied to an editor id.
 class EditorBridge {
@@ -104,18 +104,19 @@ class EditorBridge {
         });
         this.dirty = false;
         this.content = value;
+        this.language = language;
 
-        // Load/update the language graph for this file (log to console for now)
+        // Register with GraphCoordinator and trigger LSP collection
         try {
-            RelationshipManager.collectAndLogLspInfo(this.filePath)
-            //RelationshipManager.loadGraph(this.filePath, language).
+            RelationshipManager.registerEditor(this.id, {
+                filePath: this.filePath,
+                language: language
+            });
             
-            //then((graph) => {
-            //    this.graph = graph;
-            //    this.parentCanvas.editorManager.loadNeighbors(graph);
-            //});
+            // Update content and trigger LSP collection
+            RelationshipManager.updateEditorContent(this.id, this.filePath, language);
         } catch (e) {
-            console.warn("[Atlas] setLanguage: failed to load graph", e);
+            console.warn("[Atlas] setContent: failed to register with GraphCoordinator", e);
         }
     }
     toggleDiff(v) {
@@ -235,6 +236,23 @@ class EditorBridge {
                 console.error("EditorBridge handler error", e);
             }
         }
+    }
+
+    dispose() {
+        // Unregister from GraphCoordinator
+        try {
+            RelationshipManager.unregisterEditor(this.id);
+        } catch (e) {
+            console.warn("[Atlas] dispose: failed to unregister from GraphCoordinator", e);
+        }
+        
+        // Clear handlers
+        for (const set of Object.values(this.handlers)) {
+            set.clear();
+        }
+        
+        this.pendingContent.clear();
+        this._outbox.length = 0;
     }
 }
 
