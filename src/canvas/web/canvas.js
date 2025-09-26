@@ -221,8 +221,8 @@
                     
                     if (isOverEditor) {
                         // Pan canvas up/down when scrolling over an editor
-                        const panSpeed = 30; // pixels per wheel unit
-                        panBy(0, -wheel * panSpeed * 0.01);
+                        const panSpeed = 1.0; // Direct wheel delta to pixel ratio
+                        panBy(0, -wheel * panSpeed);
                         CanvasRenderer.draw();
                     } else {
                         // Normal zoom behavior when not over an editor
