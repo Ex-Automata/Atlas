@@ -206,33 +206,40 @@
             });
 
             // wheel zoom and editor scrolling
-            canvas.addEventListener(
-                "wheel",
-                (ev) => {
-                    ev.preventDefault();
-                    const rect = canvas.getBoundingClientRect();
-                    const mx = ev.clientX - rect.left;
-                    const my = ev.clientY - rect.top;
+            const handleWheel = (ev) => {
+                const rect = canvas.getBoundingClientRect();
+                const mx = ev.clientX - rect.left;
+                const my = ev.clientY - rect.top;
 
-                    // Check if mouse is over an editor widget
-                    const isOverEditor = isMouseOverEditor(mx, my);
-                    
-                    const wheel = ev.deltaY;
-                    
-                    if (isOverEditor) {
-                        // Pan canvas up/down when scrolling over an editor
-                        const panSpeed = 1.0; // Direct wheel delta to pixel ratio
-                        panBy(0, -wheel * panSpeed);
-                        CanvasRenderer.draw();
-                    } else {
-                        // Normal zoom behavior when not over an editor
-                        const zoomFactor = Math.exp(-wheel * 0.0015); // smooth
-                        setScaleAt(mx, my, scale * zoomFactor);
-                        CanvasRenderer.draw();
-                    }
-                },
-                { passive: false }
-            );
+                if (mx < 0 || my < 0 || mx > rect.width || my > rect.height)
+                    return;
+
+                // Check if mouse is over an editor widget
+                const isOverEditor = isMouseOverEditor(mx, my);
+                const wheel = ev.deltaY;
+
+                if (isOverEditor) {
+                    // Pan canvas up/down when scrolling over an editor
+                    const panSpeed = 1.0; // Direct wheel delta to pixel ratio
+                    panBy(0, -wheel * panSpeed);
+                    CanvasRenderer.draw();
+                } else {
+                    // Normal zoom behavior when not over an editor
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const zoomFactor = Math.exp(-wheel * 0.0015); // smooth
+                    setScaleAt(mx, my, scale * zoomFactor);
+                    CanvasRenderer.draw();
+                }
+            };
+
+            canvas.addEventListener("wheel", handleWheel, { passive: false });
+            if (worldEl) {
+                worldEl.addEventListener("wheel", handleWheel, {
+                    passive: false,
+                    capture: true,
+                });
+            }
 
             // touch interactions: one-finger pan, two-finger pinch-zoom
             canvas.addEventListener(
