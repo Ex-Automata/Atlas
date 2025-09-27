@@ -127,6 +127,8 @@
         const disposables = [];
         let resizeObserver = null;
     let heightRaf = 0;
+    // track editor DOM listener so we can attach directly to Monaco's DOM node
+    let attachedEditorDom = null;
 
         function post(msg) {
             try {
@@ -203,6 +205,53 @@
                 );
             }
             return editor;
+        }
+        // If editor can't scroll further in the wheel direction, propagate to canvas to pan.
+        function onRootWheel(ev) {
+            try {
+                // Only handle vertical wheel motion
+                const deltaY = ev.deltaY || 0;
+                if (deltaY === 0) return;
+                const ed = getActiveEditorForMetrics();
+                // If no editor instance, forward the event to canvas
+                if (!ed || typeof ed.getScrollTop !== "function") {
+                    ev.preventDefault();
+                    window.dispatchEvent(new CustomEvent("atlas:editorWheel", { detail: { deltaY } }));
+                    return;
+                }
+
+                // Compute scroll positions using Monaco API
+                const scrollTop = ed.getScrollTop();
+                const scrollHeight = ed.getScrollHeight();
+                const domNode = ed.getDomNode && ed.getDomNode();
+                const clientHeight = domNode ? domNode.clientHeight : 0;
+                
+                if (deltaY > 0) {
+                    // scrolling down -> if at (or very near) bottom, forward
+                    const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+                    if (atBottom) {
+                        ev.preventDefault();
+                        window.dispatchEvent(new CustomEvent("atlas:editorWheel", { detail: { deltaY } }));
+                    }
+                    // otherwise let Monaco handle native scrolling
+                } else {
+                    // scrolling up -> if at (or very near) top, forward
+                    const atTop = scrollTop <= 1;
+                    if (atTop) {
+                        ev.preventDefault();
+                        window.dispatchEvent(new CustomEvent("atlas:editorWheel", { detail: { deltaY } }));
+                    }
+                }
+            } catch (e) {
+                // on any error, forward to canvas to be safe
+                console.warn && console.warn("[editor] wheel handler error, forwarding to canvas", e);
+                try {
+                    ev.preventDefault();
+                    window.dispatchEvent(new CustomEvent("atlas:editorWheel", { detail: { deltaY: ev.deltaY || 0 } }));
+                } catch (err) {
+                    console.error && console.error("[editor] failed to forward wheel after error", err);
+                }
+            }
         }
         function getLineHeight() {
             try {
@@ -282,6 +331,20 @@
                         disposables.push(sub);
                     }
                     els.diffHost.removeAttribute("hidden");
+                    // attach to modified editor DOM inside diff editor
+                    try {
+                        const maybe =
+                            typeof diffEditor.getModifiedEditor === "function" &&
+                            diffEditor.getModifiedEditor();
+                        const node = maybe && maybe.getDomNode && maybe.getDomNode();
+                        if (node && !node.__atlasWheelAttached) {
+                            node.addEventListener("wheel", onRootWheel, { passive: false });
+                            node.__atlasWheelAttached = true;
+                            attachedEditorDom = node;
+                        }
+                    } catch (e) {
+                        console.warn && console.warn("[editor] failed to attach wheel to diff editor DOM", e);
+                    }
                 }
             } else {
                 disposeEditor("diff");
@@ -301,6 +364,17 @@
                         if (state.collapseState === 2) scheduleHeightApply();
                     });
                     disposables.push(sub);
+                    // attach wheel handling directly to Monaco's DOM node so we reliably see wheel events
+                    try {
+                        const node = editor.getDomNode && editor.getDomNode();
+                        if (node && !node.__atlasWheelAttached) {
+                            node.addEventListener("wheel", onRootWheel, { passive: false });
+                            node.__atlasWheelAttached = true;
+                            attachedEditorDom = node;
+                        }
+                    } catch (e) {
+                        console.warn && console.warn("[editor] failed to attach wheel to editor DOM", e);
+                    }
                 }
             }
             layout();
@@ -490,6 +564,10 @@
             try {
                 resizeObserver?.disconnect();
             } catch {}
+            try {
+                // detach wheel handler if present
+                root.removeEventListener("wheel", onRootWheel, { passive: false });
+            } catch {}
             resizeObserver = null;
         }
 
@@ -520,6 +598,10 @@
                 post({ type: "ready" });
                 // apply initial collapse mode (full by default)
                 applyCollapseState();
+                // Attach wheel handler to root to detect overflow and forward to canvas when appropriate
+                try {
+                    root.addEventListener("wheel", onRootWheel, { passive: false });
+                } catch {}
             })
             .catch((err) => {
                 console.error("Failed to load Monaco", err);

@@ -384,6 +384,21 @@
         CanvasNav.reset();
     });
 
+    // When editor can't scroll further, it will dispatch atlas:editorWheel with { deltaY }
+    window.addEventListener("atlas:editorWheel", (ev) => {
+        try {
+            const dy = ev && ev.detail && typeof ev.detail.deltaY === "number" ? ev.detail.deltaY : 0;
+            if (!dy) return;
+            // deltaY > 0 means user scrolls down; visually pan the world up/down to match user intent.
+            // Multiply by a sensitivity factor to taste. We invert sign so wheel down moves content up.
+            const SENS = 0.3; // tweak as needed
+            CanvasNav.panBy(0, -dy * SENS);
+            CanvasRenderer.draw();
+        } catch (err) {
+            console.warn("[canvas] failed to handle atlas:editorWheel", err);
+        }
+    });
+
     // Drag & drop files: forward file paths to the extension host for now
     function onDragOver(ev) {
         // allow drop
