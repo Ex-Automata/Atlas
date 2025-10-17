@@ -1,6 +1,9 @@
 const vscode = require("vscode");
 const { EditorBridge } = require("./EditorBridge");
-
+const { LanguageClient, TransportKind } = require('vscode-languageclient/node');
+const { LSPAdapter } = require("../lsp/LSPAdapter");
+const { default: LSPRelay } = require("../lsp/LSPRelay");
+const path = require('path');
 /**
  * EditorManager: boots the editor webview (editor.html) inside the Canvas panel.
  * - Avoids duplicate instances by reusing the canvas panel and updating content
@@ -16,30 +19,62 @@ const { EditorBridge } = require("./EditorBridge");
 function createEditorManager(parentCanvas) {
 
     const editors = new Map();
+    const lsps = new Map();
 
-    function getEditor(filePath) {
+    async function getEditor(filePath) {
         if (!editors.has(filePath)) {
             const editor = new EditorBridge(
                 filePath,
                 parentCanvas,
             );
             editors.set(filePath, editor);
-        }
 
+            const language = EditorBridge.languageFromPath(filePath);
+            if (!lsps.has(language)) {
+                const adapter = new LSPAdapter();     // <-- built-in VS Code features
+                const relay   = new LSPRelay(adapter);
+                await relay.init();                          // no-op but keeps API consistent
+                lsps.set(language, relay);
+            }
+            editor.lspRelay = lsps.get(language);
+        }
+        
+        
         // Open via bridge (handles injection + file load)
         return editors.get(filePath);
     }
 
     function loadNeighbors(graph) {
-        for (const imp of graph.imports || []) {
-            const neighbor = getEditor(imp);
+        for (const imp of graph["imports"]) {
+            const uri = imp.uri;
+            const fsPath = vscode.Uri.parse(uri).fsPath;
+            const workspaceFolders = vscode.workspace.workspaceFolders || [];
+            const isInWorkspace = workspaceFolders.some(folder => {
+                const rel = path.relative(folder.uri.fsPath, fsPath);
+                return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+            });
+            if (!isInWorkspace) continue;
+
+            const neighbor = getEditor(fsPath);
         }
+    }
+
+    function shutdown(){
+        for (const editor of editors.values()) {
+            editor.shutdown();
+        }
+        for (const relay of lsps.values()) {
+            relay.dispose();
+        }
+        editors.clear();
+        lsps.clear();
     }
 
     return {
         getEditor,
         listEditors: () => Array.from(editors.values()),
-        loadNeighbors
+        loadNeighbors,
+        shutdown
     };
 }
 

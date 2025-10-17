@@ -1,12 +1,11 @@
 const vscode = require("vscode");
-const { RelationshipManager } = require("../graph/RelationshipManager");
+const { OverlayManager } = require("../overlay/OverlayManager");
 
 // Per-editor bridge. Lifecycle tied to an editor id.
 class EditorBridge {
     /**
-     * @param {object} opts
-     * @param {string} opts.id editor id
-     * @param {{ open: Function }} opts.parentCanvas
+     * @param {string} id editor id
+     * @param {{ open: Function, editorManager?: Object }} parentCanvas
      */
     constructor(id, parentCanvas) {
         this.id = id;
@@ -20,6 +19,8 @@ class EditorBridge {
         this.collapsed = false;
         this.fullscreen = false;
         this.graph = null;
+        this.cursorPosition = { line: 0, column: 0 };
+        this.selection = { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } };
         this.handlers = {
             ready: new Set(),
             change: new Set(),
@@ -28,6 +29,8 @@ class EditorBridge {
             diff: new Set(),
             error: new Set(),
             contentResponse: new Set(),
+            cursorChange: new Set(),
+            selectionChange: new Set(),
         };
         // Queue for outbound messages until the embedded editor signals 'ready'
         this._outbox = [];
@@ -105,18 +108,12 @@ class EditorBridge {
         this.dirty = false;
         this.content = value;
 
-        // Load/update the language graph for this file (log to console for now)
-        try {
-            RelationshipManager.collectAndLogLspInfo(this.filePath)
-            //RelationshipManager.loadGraph(this.filePath, language).
-            
-            //then((graph) => {
-            //    this.graph = graph;
-            //    this.parentCanvas.editorManager.loadNeighbors(graph);
-            //});
-        } catch (e) {
-            console.warn("[Atlas] setLanguage: failed to load graph", e);
-        }
+        // Collect LSP info for this file (log to console for now)
+        //try {
+        //    OverlayManager.collectAndLogLspInfo(this.filePath).catch(() => {});
+        //} catch (e) {
+        //    console.warn("[Atlas] setContent: failed to collect LSP info", e);
+        //}
     }
     toggleDiff(v) {
         this._send({ type: "toggleDiff", value: v });
@@ -126,6 +123,105 @@ class EditorBridge {
     }
     toggleFullscreen(v) {
         this._send({ type: "toggleFullscreen", value: v });
+    }
+
+    /**
+     * Set cursor position in the editor (0-based coordinates)
+     * @param {number} line Line number (0-based)
+     * @param {number} column Column number (0-based)
+     */
+    setCursorPosition(line, column) {
+        if (typeof line !== 'number' || typeof column !== 'number' || line < 0 || column < 0) {
+            throw new Error('Invalid cursor position: line and column must be non-negative numbers');
+        }
+        this._send({ type: "setCursorPosition", line, column });
+        this.cursorPosition = { line, column };
+    }
+
+    /**
+     * Get the current cursor position (0-based coordinates)
+     * @returns {{line: number, column: number}} Current cursor position
+     */
+    getCursorPosition() {
+        return { ...this.cursorPosition };
+    }
+
+    /**
+     * Set selection in the editor (0-based coordinates)
+     * @param {number} startLine Start line number (0-based)
+     * @param {number} startColumn Start column number (0-based)
+     * @param {number} endLine End line number (0-based)
+     * @param {number} endColumn End column number (0-based)
+     */
+    setSelection(startLine, startColumn, endLine, endColumn) {
+        const coords = [startLine, startColumn, endLine, endColumn];
+        if (coords.some(coord => typeof coord !== 'number' || coord < 0)) {
+            throw new Error('Invalid selection coordinates: all values must be non-negative numbers');
+        }
+        this._send({ 
+            type: "setSelection", 
+            start: { line: startLine, column: startColumn },
+            end: { line: endLine, column: endColumn }
+        });
+        this.selection = {
+            start: { line: startLine, column: startColumn },
+            end: { line: endLine, column: endColumn }
+        };
+    }
+
+    /**
+     * Get the current selection (0-based coordinates)
+     * @returns {{start: {line: number, column: number}, end: {line: number, column: number}}} Current selection
+     */
+    getSelection() {
+        return {
+            start: { ...this.selection.start },
+            end: { ...this.selection.end }
+        };
+    }
+
+    requestCursorPosition() {
+        const requestId = `cursor-${Date.now().toString(36)}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}`;
+        return new Promise((resolve, reject) => {
+            this.pendingContent.set(requestId, { resolve, reject });
+            this._send({ type: "getCursorPosition", requestId });
+            setTimeout(() => {
+                if (this.pendingContent.has(requestId)) {
+                    this.pendingContent.delete(requestId);
+                    reject(new Error("getCursorPosition timeout"));
+                }
+            }, 5000);
+        });
+    }
+
+    requestSelection() {
+        const requestId = `selection-${Date.now().toString(36)}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}`;
+        return new Promise((resolve, reject) => {
+            this.pendingContent.set(requestId, { resolve, reject });
+            this._send({ type: "getSelection", requestId });
+            setTimeout(() => {
+                if (this.pendingContent.has(requestId)) {
+                    this.pendingContent.delete(requestId);
+                    reject(new Error("getSelection timeout"));
+                }
+            }, 5000);
+        });
+    }
+
+    async requestCursorAndSelection() {
+        try {
+            const [cursorPosition, selection] = await Promise.all([
+                this.requestCursorPosition(),
+                this.requestSelection()
+            ]);
+            return { cursorPosition, selection };
+        } catch (error) {
+            throw new Error(`Failed to get cursor and selection: ${error.message}`);
+        }
     }
 
     requestContent() {
@@ -142,6 +238,19 @@ class EditorBridge {
                 }
             }, 5000);
         });
+    }
+
+    async refreshLSP(){
+        console.log("[Atlas:EditorBridge] Refreshed LSP graph:", this.graph);
+        try {
+            this.graph = await this.lspRelay.collect({
+                uri: vscode.Uri.file(this.filePath).toString(),
+                position: this.cursorPosition,
+            });
+            return this.graph;  
+        } catch (err) {
+            console.error('LSP refresh failed for', this.filePath, err);
+        }
     }
 
     open(filePath) {
@@ -219,6 +328,46 @@ class EditorBridge {
                 vscode.window.showErrorMessage(
                     `Editor error: ${msg.error || "unknown"}`
                 );
+                break;
+            case "cursorPositionChange":
+                if (msg.line !== undefined && msg.column !== undefined) {
+                    this.cursorPosition = { line: msg.line, column: msg.column };
+                    this._fire("cursorChange", msg);
+                }
+                break;
+            case "selectionChange":
+                if (msg.start && msg.end) {
+                    this.selection = {
+                        start: { line: msg.start.line, column: msg.start.column },
+                        end: { line: msg.end.line, column: msg.end.column }
+                    };
+                    this._fire("selectionChange", msg);
+                }
+                break;
+            case "cursorPosition": {
+                const req =
+                    msg.requestId && this.pendingContent.get(msg.requestId);
+                if (req) {
+                    this.pendingContent.delete(msg.requestId);
+                    req.resolve({ line: msg.line, column: msg.column });
+                }
+                break;
+            }
+            case "selection": {
+                const req =
+                    msg.requestId && this.pendingContent.get(msg.requestId);
+                if (req) {
+                    this.pendingContent.delete(msg.requestId);
+                    req.resolve({
+                        start: { line: msg.start.line, column: msg.start.column },
+                        end: { line: msg.end.line, column: msg.end.column }
+                    });
+                }
+                break;
+            }
+            case "loadNeighbors":
+                this.refreshLSP();
+                this.parentCanvas.editorManager?.loadNeighbors(this.graph);
                 break;
             default:
                 break;

@@ -119,6 +119,10 @@ class CanvasBridge {
                 throw e;
             });
     }
+
+    shutdown(){
+        
+    }
 }
 
 // ----------------- HTML builder (moved from CanvasManager) -----------------

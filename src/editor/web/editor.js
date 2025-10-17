@@ -96,6 +96,7 @@
             btnCollapse: root.querySelector("#btn-collapse"),
             btnFullscreen: root.querySelector("#btn-fullscreen"),
             btnDiff: root.querySelector("#btn-diff"),
+            btnLoadNeighbors: root.querySelector("#btn-load-neighbors"),
         };
         const ds = root.dataset || {};
         const state = {
@@ -117,6 +118,7 @@
         els.btnCollapse?.addEventListener("click", () => cycleCollapse());
         els.btnFullscreen?.addEventListener("click", () => toggleFullscreen());
         els.btnDiff?.addEventListener("click", () => toggleDiff());
+        els.btnLoadNeighbors?.addEventListener("click", () => loadNeighbors());
 
         // Observe theme attribute
         els.btnFullscreen?.setAttribute("aria-pressed", "false");
@@ -364,6 +366,34 @@
                         if (state.collapseState === 2) scheduleHeightApply();
                     });
                     disposables.push(sub);
+                    
+                    // Listen for cursor position changes
+                    const cursorSub = editor.onDidChangeCursorPosition((e) => {
+                        const position = e.position;
+                        post({ 
+                            type: "cursorPositionChange", 
+                            line: position.lineNumber - 1, // Convert to 0-based
+                            column: position.column - 1 
+                        });
+                    });
+                    disposables.push(cursorSub);
+                    
+                    // Listen for selection changes
+                    const selectionSub = editor.onDidChangeCursorSelection((e) => {
+                        const selection = e.selection;
+                        post({ 
+                            type: "selectionChange",
+                            start: { 
+                                line: selection.startLineNumber - 1, // Convert to 0-based
+                                column: selection.startColumn - 1 
+                            },
+                            end: { 
+                                line: selection.endLineNumber - 1, 
+                                column: selection.endColumn - 1 
+                            }
+                        });
+                    });
+                    disposables.push(selectionSub);
                     // attach wheel handling directly to Monaco's DOM node so we reliably see wheel events
                     try {
                         const node = editor.getDomNode && editor.getDomNode();
@@ -470,6 +500,9 @@
             scheduleHeightApply();
             post({ type: "diff", value: next });
         }
+        function loadNeighbors() {
+            post({ type: "loadNeighbors" });
+        }
         function setValue(text) {
             state.content = text || "";
             if (editor && !state.diff) editor.setValue(state.content);
@@ -555,6 +588,56 @@
                 case "toggleFullscreen":
                     toggleFullscreen(!!msg.value);
                     break;
+                case "setCursorPosition":
+                    if (editor && msg.line !== undefined && msg.column !== undefined) {
+                        const position = { lineNumber: msg.line + 1, column: msg.column + 1 }; // Convert to 1-based
+                        editor.setPosition(position);
+                        editor.revealPosition(position);
+                    }
+                    break;
+                case "getCursorPosition":
+                    if (editor) {
+                        const position = editor.getPosition();
+                        post({
+                            type: "cursorPosition",
+                            line: position.lineNumber - 1, // Convert to 0-based
+                            column: position.column - 1,
+                            requestId: msg.requestId,
+                        });
+                    }
+                    break;
+                case "setSelection":
+                    if (editor && msg.start && msg.end) {
+                        const selection = {
+                            startLineNumber: msg.start.line + 1, // Convert to 1-based
+                            startColumn: msg.start.column + 1,
+                            endLineNumber: msg.end.line + 1,
+                            endColumn: msg.end.column + 1
+                        };
+                        editor.setSelection(selection);
+                        editor.revealRange(selection);
+                    }
+                    break;
+                case "getSelection":
+                    if (editor) {
+                        const selection = editor.getSelection();
+                        post({
+                            type: "selection",
+                            start: { 
+                                line: selection.startLineNumber - 1, // Convert to 0-based
+                                column: selection.startColumn - 1 
+                            },
+                            end: { 
+                                line: selection.endLineNumber - 1, 
+                                column: selection.endColumn - 1 
+                            },
+                            requestId: msg.requestId,
+                        });
+                    }
+                    break;
+                case "loadNeighbors":
+                    loadNeighbors();
+                    break;
                 default:
                     break;
             }
@@ -631,6 +714,7 @@
             cycleCollapse,
             toggleDiff,
             toggleFullscreen,
+            loadNeighbors,
             dispose,
         };
         // register locally

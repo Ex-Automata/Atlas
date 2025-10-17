@@ -29,7 +29,7 @@ function activate(context) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand("atlas.open.entrypoint", async () => {
-            atlasTab = openAtlasTab("atlas.tab.entrypoint", "Atlas - Pathfinder", context.extensionUri);
+            atlasTab = openAtlasTab("atlas.tab.entrypoint", "Atlas - Pathfinder", context);
 
             try {
                 const entry = await detectEntrypoint();
@@ -46,12 +46,12 @@ function activate(context) {
     );
     context.subscriptions.push(
         vscode.commands.registerCommand("atlas.open", async () => {
-            openAtlasTab("atlas.tab", "Atlas", context.extensionUri);
+            openAtlasTab("atlas.tab", "Atlas", context);
         })
     );
     context.subscriptions.push(
         vscode.commands.registerCommand("atlas.open.empty", async () => {
-            openAtlasTab("atlas.canvas", "Atlas", context.extensionUri);
+            openAtlasTab("atlas.canvas", "Atlas", context);
         })
     );
 
@@ -75,7 +75,7 @@ function activate(context) {
                 }
 
                 // Ensure canvas is open
-                tab = openAtlasTab("atlas.canvas", "Atlas", context.extensionUri);                
+                tab = openAtlasTab("atlas.canvas", "Atlas", context);
 
                 // Post to webview and also log visibly
                 const paths = list.map((u) => u.fsPath || u.path || String(u));
@@ -97,7 +97,11 @@ function activate(context) {
     });
 }
 
-function deactivate() {}
+function deactivate() {
+    for (const tab of atlasTabs.values()) {
+        tab.dispose();
+    }
+}
 
 module.exports = { activate, deactivate };
 
@@ -142,12 +146,14 @@ async function detectEntrypoint() {
     return null;
 }
 
-function openAtlasTab(id, title, extensionUri) {
+function openAtlasTab(id, title, context) {
     if (atlasTabs.has(id)) {
         const existingTab = atlasTabs.get(id);
         existingTab.reveal(vscode.ViewColumn.One);
         return existingTab;
     }
+
+    const extensionUri = context.extensionUri;
     const tab = vscode.window.createWebviewPanel(
         id,
         title,
@@ -171,6 +177,18 @@ function openAtlasTab(id, title, extensionUri) {
                     "editor",
                     "web"
                 ),
+                vscode.Uri.joinPath(
+                    extensionUri,
+                    "src",
+                    "lsp",
+                    "web"
+                ),
+                vscode.Uri.joinPath(
+                    extensionUri,
+                    "src",
+                    "overlay",
+                    "web"
+                ),
             ],
         }
     );
@@ -182,10 +200,12 @@ function openAtlasTab(id, title, extensionUri) {
 
     tab.webview.html = `<html><body style="background:transparent;color:var(--vscode-editor-foreground);font-family:var(--vscode-editor-font-family)">Loading Atlas Canvas…</body></html>`;
     tab.onDidDispose(() => {
-        canvas.shutdown();
+        tab.canvas.shutdown();
+        tab.canvas.editorManager.shutdown();
         atlasTabs.delete(id);
     });
 
+    tab.context = context
     tab.extensionUri = extensionUri;
     tab.canvas = new CanvasBridge(tab);
     tab.canvas.editorManager = createEditorManager(tab.canvas);

@@ -5,8 +5,12 @@
   "description": "Visualize connections between files; highlight refs for selected token.",
   "version": "0.0.1",
   "publisher": "you",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Other"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -66,13 +70,21 @@
       ]
     },
     "keybindings": [
-      { "command": "atlas.open", "key": "ctrl+alt+a", "when": "editorTextFocus" }
+      {
+        "command": "atlas.open",
+        "key": "ctrl+alt+a",
+        "when": "editorTextFocus"
+      }
     ]
   },
-  "scripts": { 
+  "scripts": {
     "vscode:prepublish": "echo \"no build\"",
     "build:webview": "echo \"no bundler configured yet\"",
     "build": "npm run build:webview"
   },
-  "dependencies": {}
+  "dependencies": {
+    "leader-line": "^1.0.8",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver-protocol": "^3.17.5"
+  }
 }
