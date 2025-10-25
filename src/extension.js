@@ -1,6 +1,7 @@
 const vscode = require("vscode");
 const { createEditorManager } = require("./editor/EditorManager");
 const { CanvasBridge } = require("./canvas/CanvasBridge");
+const { createAnnotationManager } = require("./annotation/AnnotationManager");
 
 const STATE_KEY = "atlas.state";
 
@@ -149,8 +150,14 @@ async function detectEntrypoint() {
 function openAtlasTab(id, title, context) {
     if (atlasTabs.has(id)) {
         const existingTab = atlasTabs.get(id);
-        existingTab.reveal(vscode.ViewColumn.One);
-        return existingTab;
+        try {
+            existingTab.reveal(vscode.ViewColumn.One);
+            return existingTab;
+        } catch (error) {
+            // Webview was disposed, remove it and create a new one
+            console.log(`Atlas: Webview for ${id} was disposed, creating new one`);
+            atlasTabs.delete(id);
+        }
     }
 
     const extensionUri = context.extensionUri;
@@ -186,7 +193,7 @@ function openAtlasTab(id, title, context) {
                 vscode.Uri.joinPath(
                     extensionUri,
                     "src",
-                    "overlay",
+                    "annotation",
                     "web"
                 ),
             ],
@@ -200,6 +207,7 @@ function openAtlasTab(id, title, context) {
 
     tab.webview.html = `<html><body style="background:transparent;color:var(--vscode-editor-foreground);font-family:var(--vscode-editor-font-family)">Loading Atlas Canvas…</body></html>`;
     tab.onDidDispose(() => {
+        tab.canvas.annotationManager?.dispose?.();
         tab.canvas.shutdown();
         tab.canvas.editorManager.shutdown();
         atlasTabs.delete(id);
@@ -209,6 +217,8 @@ function openAtlasTab(id, title, context) {
     tab.extensionUri = extensionUri;
     tab.canvas = new CanvasBridge(tab);
     tab.canvas.editorManager = createEditorManager(tab.canvas);
+    // Annotation manager will receive handlers from LSPRelay instances via EditorManager
+    tab.canvas.annotationManager = createAnnotationManager(tab.canvas);
 
 
     tab.webview.onDidReceiveMessage((msg) => {

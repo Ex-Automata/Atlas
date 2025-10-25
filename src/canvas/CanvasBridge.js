@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { RELATION_TYPES } = require("../annotation/AnnotationManager");
 
 /**
  * CanvasBridge encapsulates all communication between the extension host and the
@@ -147,6 +148,22 @@ function buildHtmlFromIndex(webview, extensionUri) {
     const sidebarScriptUri = webview.asWebviewUri(
         vscode.Uri.joinPath(basePath, "sidebar.js")
     );
+    const annotationBase = vscode.Uri.joinPath(extensionUri, "src", "annotation", "web");
+    const annotationCoreUri = webview.asWebviewUri(
+        vscode.Uri.joinPath(annotationBase, "annotations-core.js")
+    );
+    const relationScripts = RELATION_TYPES.map((rel) => {
+        const relUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(annotationBase, rel.id, "annotation.js")
+        );
+        return `<script defer src="${String(relUri)}"></script>`;
+    }).join("\n        ");
+    const annotationScripts = [
+        `<script defer src="${String(annotationCoreUri)}"></script>`,
+        relationScripts,
+    ]
+        .filter(Boolean)
+        .join("\n        ");
     const canvasUri = vscode.Uri.joinPath(basePath, "canvas.html");
     const cspSource = webview.cspSource;
 
@@ -174,7 +191,8 @@ function buildHtmlFromIndex(webview, extensionUri) {
             .replace(/\{\{EDITOR_CSS\}\}/g, String(editorStyleUri))
             .replace(/\{\{EDITOR_JS\}\}/g, String(editorScriptUri))
             .replace(/\{\{SIDEBAR_CSS\}\}/g, String(sidebarStyleUri))
-            .replace(/\{\{SIDEBAR_JS\}\}/g, String(sidebarScriptUri));
+            .replace(/\{\{SIDEBAR_JS\}\}/g, String(sidebarScriptUri))
+            .replace(/\{\{ANNOTATION_SCRIPTS\}\}/g, annotationScripts);
         return html;
     });
 }

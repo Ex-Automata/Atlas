@@ -1,5 +1,4 @@
 const vscode = require("vscode");
-const { OverlayManager } = require("../overlay/OverlayManager");
 
 // Per-editor bridge. Lifecycle tied to an editor id.
 class EditorBridge {
@@ -108,12 +107,6 @@ class EditorBridge {
         this.dirty = false;
         this.content = value;
 
-        // Collect LSP info for this file (log to console for now)
-        //try {
-        //    OverlayManager.collectAndLogLspInfo(this.filePath).catch(() => {});
-        //} catch (e) {
-        //    console.warn("[Atlas] setContent: failed to collect LSP info", e);
-        //}
     }
     toggleDiff(v) {
         this._send({ type: "toggleDiff", value: v });
@@ -367,6 +360,7 @@ class EditorBridge {
             }
             case "loadNeighbors":
                 this.refreshLSP();
+                this.parentCanvas.annotationManager?.displayAnnotations(this.graph);
                 this.parentCanvas.editorManager?.loadNeighbors(this.graph);
                 break;
             default:

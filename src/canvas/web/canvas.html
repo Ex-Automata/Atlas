@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="{{CANVAS_CSS}}" />
     <!-- Editor styles (rewritten to webview URI by builder) -->
     <link rel="stylesheet" href="{{EDITOR_CSS}}" />
+        <!-- Leader Line library for drawing connections -->
+        <script src="https://cdn.jsdelivr.net/npm/leader-line@1.0.7/leader-line.min.js"></script>
         <!-- Monaco AMD loader (CDN) and editor runtime (rewritten by builder) -->
         <script
             defer
@@ -15,6 +17,7 @@
     <script defer src="{{EDITOR_JS}}"></script>
     <link rel="stylesheet" href="{{SIDEBAR_CSS}}">
     <script defer src="{{SIDEBAR_JS}}"></script>
+    {{ANNOTATION_SCRIPTS}}
     </head>
     <body>
         <div

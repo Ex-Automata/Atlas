@@ -37,16 +37,18 @@ function createEditorManager(parentCanvas) {
                 lsps.set(language, relay);
             }
             editor.lspRelay = lsps.get(language);
+            editor.refreshLSP().then(graph => {
+                // Graph is already normalized by handlers in LSPRelay
+                parentCanvas.annotationManager?.displayAnnotations(graph);
+            });
         }
-        
-        
-        // Open via bridge (handles injection + file load)
         return editors.get(filePath);
     }
 
     function loadNeighbors(graph) {
-        for (const imp of graph["imports"]) {
-            const uri = imp.uri;
+        // graph.imports is now {uri: {annotationId: annotation}} structure 
+        for (const reference of Object.values(Object.values(graph["imports"])[0])) {
+            const uri = reference["targetPath"];
             const fsPath = vscode.Uri.parse(uri).fsPath;
             const workspaceFolders = vscode.workspace.workspaceFolders || [];
             const isInWorkspace = workspaceFolders.some(folder => {

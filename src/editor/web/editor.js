@@ -59,6 +59,56 @@
 
     // Module-local registry for editor instances
     const registry = new Map();
+    const RELATION_PALETTE = {
+        "document_symbols": {
+            ruler: "#ff4d6d",
+            minimap: "#ff4d6d",
+        },
+        "folding_ranges": {
+            ruler: "#ff8c42",
+            minimap: "#ff8c42",
+        },
+        "definitions": {
+            ruler: "#ffc53d",
+            minimap: "#ffc53d",
+        },
+        "declarations": {
+            ruler: "#fadb14",
+            minimap: "#fadb14",
+        },
+        "implementations": {
+            ruler: "#ff85c0",
+            minimap: "#ff85c0",
+        },
+        "type_definitions": {
+            ruler: "#b37feb",
+            minimap: "#b37feb",
+        },
+        "references": {
+            ruler: "#69c0ff",
+            minimap: "#69c0ff",
+        },
+        "imports": {
+            ruler: "#73d13d",
+            minimap: "#73d13d",
+        },
+        "call_hierarchy": {
+            ruler: "#13c2c2",
+            minimap: "#13c2c2",
+        },
+        "type_hierarchy": {
+            ruler: "#9254de",
+            minimap: "#9254de",
+        },
+        "manual": {
+            ruler: "#ff4dd2",
+            minimap: "#ff4dd2",
+        },
+    };
+    const DEFAULT_RELATION_PALETTE = {
+        ruler: "rgba(255, 77, 79, 0.85)",
+        minimap: "rgba(255, 77, 79, 0.85)",
+    };
 
     function getEditor(id) {
         if (!id) return null;
@@ -131,7 +181,9 @@
     let heightRaf = 0;
     // track editor DOM listener so we can attach directly to Monaco's DOM node
     let attachedEditorDom = null;
-
+    let pendingAnnotations = null;
+    const annotationDecorations = new WeakMap();
+    const annotationOptionCache = new Map();
         function post(msg) {
             try {
                 if (msg && typeof msg === "object" && msg.id == null)
@@ -407,11 +459,13 @@
                     }
                 }
             }
+            flushPendingAnnotations();
             layout();
         }
         function disposeEditor(which) {
             if (which === "single" || which === "all") {
                 if (editor && !editor._disposed) {
+                    clearDecorationsForTarget(editor);
                     try {
                         state.content = editor.getValue();
                     } catch {}
@@ -422,6 +476,13 @@
             }
             if (which === "diff" || which === "all") {
                 if (diffEditor && !diffEditor._disposed) {
+                    try {
+                        const modified =
+                            typeof diffEditor.getModifiedEditor === "function"
+                                ? diffEditor.getModifiedEditor()
+                                : null;
+                        clearDecorationsForTarget(modified);
+                    } catch {}
                     try {
                         const m = diffEditor.getModel()?.modified;
                         if (m) state.modified = m.getValue();
@@ -550,6 +611,220 @@
             root.setAttribute("data-theme", theme);
             applyTheme();
         }
+        function setModelUri(uri) {
+            if (!uri) return;
+            state.modelUri = uri;
+        }
+        function slugRelation(relation) {
+            return String(relation || "annotation")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "") || "annotation";
+        }
+        function sanitizeAnchorId(value) {
+            if (value == null) return null;
+            const normalized = String(value)
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "");
+            return normalized || null;
+        }
+        function getAnnotationTargets() {
+            if (state.diff && diffEditor && !diffEditor._disposed) {
+                const modified =
+                    typeof diffEditor.getModifiedEditor === "function"
+                        ? diffEditor.getModifiedEditor()
+                        : null;
+                return modified ? [modified] : [];
+            }
+            if (editor && !editor._disposed) return [editor];
+            return [];
+        }
+        function getDecorationBucket(target) {
+            if (!annotationDecorations.has(target)) {
+                annotationDecorations.set(target, new Map());
+            }
+            return annotationDecorations.get(target);
+        }
+        function clampLineNumber(model, candidate) {
+            const line = Math.max(1, candidate);
+            const max = typeof model.getLineCount === "function" ? model.getLineCount() : line;
+            return Math.min(line, max || line);
+        }
+        function toMonacoRange(model, raw) {
+            if (!model || !raw) return null;
+            const baseStart = Number.isFinite(raw.startLine) ? raw.startLine + 1 : 1;
+            const baseEnd = Number.isFinite(raw.endLine)
+                ? raw.endLine + 1
+                : Number.isFinite(raw.startLine)
+                ? raw.startLine + 1
+                : baseStart;
+            const startLine = clampLineNumber(model, baseStart);
+            const endLine = clampLineNumber(model, Math.max(baseEnd, baseStart));
+            let startColumn = Number.isFinite(raw.startColumn) ? raw.startColumn + 1 : 1;
+            let endColumn = Number.isFinite(raw.endColumn)
+                ? raw.endColumn + 1
+                : typeof model.getLineMaxColumn === "function"
+                ? model.getLineMaxColumn(endLine)
+                : startColumn;
+            if (raw.isWholeLine) {
+                startColumn = 1;
+                if (typeof model.getLineMaxColumn === "function") {
+                    endColumn = model.getLineMaxColumn(endLine);
+                }
+            } else {
+                if (!Number.isFinite(raw.startColumn)) startColumn = 1;
+                if (!Number.isFinite(raw.endColumn) && typeof model.getLineMaxColumn === "function") {
+                    endColumn = model.getLineMaxColumn(endLine);
+                }
+            }
+            if (endColumn < startColumn) {
+                endColumn = startColumn;
+            }
+            try {
+                return new monaco.Range(startLine, startColumn, endLine, endColumn);
+            } catch {
+                return null;
+            }
+        }
+        function buildAnnotationOptions(relation) {
+            if (!annotationOptionCache.has(relation)) {
+                const cls = slugRelation(relation);
+                const palette = RELATION_PALETTE[relation] || DEFAULT_RELATION_PALETTE;
+                const config = {
+                    inlineClassName: `atlas-annotation-range atlas-annotation-${cls}`,
+                    overviewRuler: {
+                        color: palette.ruler,
+                        position: monaco.editor.OverviewRulerLane.Full,
+                    },
+                    stickiness:
+                        monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+                };
+                if (palette.minimap) {
+                    config.minimap = { color: palette.minimap };
+                }
+                annotationOptionCache.set(relation, config);
+            }
+            return annotationOptionCache.get(relation);
+        }
+        function applyAnnotationsInternal(payload, targets) {
+            if (!Array.isArray(payload) || payload.length === 0) {
+                for (const target of targets) {
+                    const bucket = getDecorationBucket(target);
+                    for (const ids of bucket.values()) {
+                        try {
+                            target.deltaDecorations(ids, []);
+                        } catch {}
+                    }
+                    bucket.clear();
+                }
+                return;
+            }
+            for (const target of targets) {
+                const bucket = getDecorationBucket(target);
+                const model = typeof target.getModel === "function" ? target.getModel() : null;
+                if (!model) continue;
+                const seen = new Set();
+                for (const entry of payload) {
+                    if (!entry) continue;
+                    const relation = entry.relation || "annotation";
+                    seen.add(relation);
+                    const ranges = Array.isArray(entry.ranges) ? entry.ranges : [];
+                    const decorations = [];
+                    const baseOptions = buildAnnotationOptions(relation);
+                    const baseInlineClass = baseOptions?.inlineClassName || "";
+                    for (const raw of ranges) {
+                        const range = toMonacoRange(model, raw);
+                        if (!range) continue;
+                        const options = { ...baseOptions };
+                        if (baseOptions?.overviewRuler) {
+                            options.overviewRuler = { ...baseOptions.overviewRuler };
+                        }
+                        if (baseOptions?.minimap) {
+                            options.minimap = { ...baseOptions.minimap };
+                        }
+                        const anchorId = sanitizeAnchorId(raw.anchorId || raw.annotationId);
+                        if (anchorId) {
+                            options.inlineClassName = `${baseInlineClass} atlas-anchor-${anchorId}`.trim();
+                        } else {
+                            options.inlineClassName = baseInlineClass;
+                        }
+                        if (raw.hover != null) {
+                            if (typeof monaco !== "undefined" && typeof monaco.MarkdownString === "function") {
+                                options.hoverMessage = new monaco.MarkdownString(String(raw.hover));
+                            } else {
+                                options.hoverMessage = String(raw.hover);
+                            }
+                        }
+                        decorations.push({ range, options });
+                    }
+                    const previous = bucket.get(relation) || [];
+                    let ids = [];
+                    try {
+                        ids = target.deltaDecorations(previous, decorations);
+                    } catch {
+                        ids = [];
+                    }
+                    bucket.set(relation, ids);
+                }
+                for (const [relation, ids] of bucket.entries()) {
+                    if (seen.has(relation)) continue;
+                    let cleared = [];
+                    try {
+                        cleared = target.deltaDecorations(ids, []);
+                    } catch {
+                        cleared = [];
+                    }
+                    bucket.set(relation, cleared);
+                }
+            }
+        }
+        function applyAnnotations(payload, options = {}) {
+            const arr = Array.isArray(payload) ? payload : [];
+            if (!options.fromFlush) {
+                pendingAnnotations = arr;
+            }
+            if (!options.fromFlush) {
+                if (!monaco || !monaco.editor) {
+                    return;
+                }
+                try {
+                    createEditorIfNeeded();
+                } catch {}
+            }
+            const targets = getAnnotationTargets();
+            if (!targets.length) {
+                return;
+            }
+            if (!options.fromFlush) {
+                pendingAnnotations = null;
+            }
+            applyAnnotationsInternal(arr, targets);
+        }
+        function flushPendingAnnotations() {
+            if (pendingAnnotations == null) return;
+            const buffer = pendingAnnotations;
+            pendingAnnotations = null;
+            applyAnnotations(buffer, { fromFlush: true });
+        }
+        function clearDecorationsForTarget(target) {
+            if (!target) return;
+            const bucket = annotationDecorations.get(target);
+            if (!bucket) return;
+            for (const ids of bucket.values()) {
+                try {
+                    target.deltaDecorations(ids, []);
+                } catch {}
+            }
+            bucket.clear();
+        }
+        function clearAnnotationDecorations() {
+            const targets = getAnnotationTargets();
+            for (const target of targets) {
+                clearDecorationsForTarget(target);
+            }
+        }
         function onMessage(msg) {
             if (!msg || typeof msg !== "object") return;
             if (msg.id != null && msg.id !== state.id) return;
@@ -557,7 +832,7 @@
                 case "setContent":
                     setValue(msg.value || "");
                     if (msg.language) setLanguage(msg.language);
-                    if (msg.uri) state.modelUri = msg.uri;
+                    if (msg.uri) setModelUri(msg.uri);
                     break;
                 case "getContent":
                     post({
@@ -638,12 +913,17 @@
                 case "loadNeighbors":
                     loadNeighbors();
                     break;
+                case "annotation:apply":
+                    applyAnnotations(msg.annotations || []);
+                    break;
                 default:
                     break;
             }
         }
         function dispose() {
             disposeEditor("all");
+            pendingAnnotations = null;
+            annotationOptionCache.clear();
             try {
                 resizeObserver?.disconnect();
             } catch {}
@@ -759,6 +1039,5 @@
     if (document.readyState === "loading")
         document.addEventListener("DOMContentLoaded", start);
     else start();
-
     // no global exports; EditorBridge controls editors by posting messages with id
 })();
