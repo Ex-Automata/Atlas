@@ -7,6 +7,179 @@
     const activeLines = new Map();
     let updateScheduled = false;
     let leaderLineWarned = false;
+    const pinnedLines = new Set(); // Track which lines should stay visible
+    let delegatedHandlersInstalled = false;
+
+    function installDelegatedHandlersOnce() {
+        if (delegatedHandlersInstalled) return;
+        delegatedHandlersInstalled = true;
+
+        // Helper to find nearest editor shell
+        function getShell(node) {
+            return node && node.closest ? node.closest('.editor-shell[data-editor-id]') : null;
+        }
+
+        // Extract atlas anchor id from a node's class list
+        function getAnchorIdFromNode(node) {
+            if (!node || !node.classList) return null;
+            for (const cls of node.classList) {
+                if (cls.startsWith('atlas-anchor-')) {
+                    return cls.slice('atlas-anchor-'.length);
+                }
+            }
+            return null;
+        }
+
+        // Delegated click to toggle pinning even when direct listeners fail
+        document.addEventListener(
+            'click',
+            (e) => {
+                const clickX = e.clientX;
+                const clickY = e.clientY;
+
+                // 1) Try DOM-ancestor detection first
+                let target = e.target;
+                let anchorId = null;
+                while (target && target !== document.body && !anchorId) {
+                    anchorId = getAnchorIdFromNode(target);
+                    if (!anchorId) target = target.parentElement;
+                }
+                // Find shell from the nearest element we have
+                let shell = getShell(target || e.target);
+
+                // 2) If we still don't have an anchor, do a manual hit-test over anchor spans
+                if (!anchorId) {
+                    // If we don't have shell yet, try to get it from the initial event target
+                    if (!shell) shell = getShell(e.target);
+                    if (!shell) return;
+                    const anchors = shell.querySelectorAll('[class*="atlas-anchor-"]');
+                    for (const el of anchors) {
+                        const rect = el.getBoundingClientRect();
+                        if (
+                            clickX >= rect.left &&
+                            clickX <= rect.right &&
+                            clickY >= rect.top &&
+                            clickY <= rect.bottom
+                        ) {
+                            anchorId = getAnchorIdFromNode(el);
+                            if (anchorId) { target = el; break; }
+                        }
+                    }
+                }
+
+                if (!anchorId) return;
+                if (!shell) shell = getShell(target);
+                if (!shell) return;
+                const editorId = (shell.getAttribute('data-editor-id') || '').toLowerCase();
+                if (!editorId) return;
+
+                // Find matching entries by anchorId and source editor id
+                const matches = [];
+                for (const [key, entry] of activeLines.entries()) {
+                    if (!entry) continue;
+                    const entryAnchor = (entry.anchorId || '').toLowerCase();
+                    const entrySrc = (normalizePathLike(entry.sourceUri) || '').toLowerCase();
+                    if (entryAnchor === anchorId && (entrySrc === editorId || entrySrc.endsWith(editorId) || editorId.endsWith(entrySrc))) {
+                        matches.push([key, entry]);
+                    }
+                }
+                if (!matches.length) return;
+
+                // Toggle pin state for all matches
+                e.preventDefault();
+                e.stopPropagation();
+                for (const [key, entry] of matches) {
+                    const isPinned = pinnedLines.has(key);
+                    if (isPinned) {
+                        pinnedLines.delete(key);
+                        // Hide if cursor not hovering (best effort)
+                        if (entry.line) {
+                            try { entry.line.hide('draw', { duration: 200 }); } catch {}
+                        }
+                    } else {
+                        pinnedLines.add(key);
+                        // Ensure line exists and show it
+                        updateEntryPosition(key);
+                        if (entry.line) {
+                            try { entry.line.show('draw', { duration: 200 }); } catch {}
+                        }
+                    }
+                }
+            },
+            true // capture to beat Monaco handlers
+        );
+
+        // Delegated hover (mouseover/mouseout) to show/hide when not pinned
+        document.addEventListener(
+            'mouseover',
+            (e) => {
+                let target = e.target;
+                let anchorId = null;
+                while (target && target !== document.body && !anchorId) {
+                    anchorId = getAnchorIdFromNode(target);
+                    if (!anchorId) target = target.parentElement;
+                }
+                if (!anchorId) return;
+                const shell = getShell(target);
+                if (!shell) return;
+                const editorId = (shell.getAttribute('data-editor-id') || '').toLowerCase();
+                if (!editorId) return;
+
+                for (const [key, entry] of activeLines.entries()) {
+                    const entryAnchor = (entry.anchorId || '').toLowerCase();
+                    const entrySrc = (normalizePathLike(entry.sourceUri) || '').toLowerCase();
+                    if (
+                        entryAnchor === anchorId &&
+                        (entrySrc === editorId || entrySrc.endsWith(editorId) || editorId.endsWith(entrySrc))
+                    ) {
+                        if (!pinnedLines.has(key)) {
+                            updateEntryPosition(key);
+                            if (entry.line) {
+                                try { entry.line.show('draw', { duration: 150 }); } catch {}
+                            }
+                        }
+                    }
+                }
+            },
+            true
+        );
+        document.addEventListener(
+            'mouseout',
+            (e) => {
+                let target = e.target;
+                let anchorId = null;
+                while (target && target !== document.body && !anchorId) {
+                    anchorId = getAnchorIdFromNode(target);
+                    if (!anchorId) target = target.parentElement;
+                }
+                if (!anchorId) return;
+                const shell = getShell(target);
+                if (!shell) return;
+                const editorId = (shell.getAttribute('data-editor-id') || '').toLowerCase();
+                if (!editorId) return;
+
+                // If moving within the same anchor, ignore
+                const related = e.relatedTarget;
+                if (related && target && target.contains && target.contains(related)) return;
+
+                for (const [key, entry] of activeLines.entries()) {
+                    const entryAnchor = (entry.anchorId || '').toLowerCase();
+                    const entrySrc = (normalizePathLike(entry.sourceUri) || '').toLowerCase();
+                    if (
+                        entryAnchor === anchorId &&
+                        (entrySrc === editorId || entrySrc.endsWith(editorId) || editorId.endsWith(entrySrc))
+                    ) {
+                        if (!pinnedLines.has(key)) {
+                            if (entry.line) {
+                                try { entry.line.hide('draw', { duration: 150 }); } catch {}
+                            }
+                        }
+                    }
+                }
+            },
+            true
+        );
+    }
 
     function normalizePathLike(value) {
         if (!value || typeof value !== "string") return null;
@@ -83,12 +256,28 @@
 
     function removeLine(entry) {
         if (entry && entry.line) {
+            // Clean up event listeners
+            if (entry.anchorElement) {
+                if (entry.mouseEnterHandler) {
+                    entry.anchorElement.removeEventListener('mouseenter', entry.mouseEnterHandler);
+                }
+                if (entry.mouseLeaveHandler) {
+                    entry.anchorElement.removeEventListener('mouseleave', entry.mouseLeaveHandler);
+                }
+                if (entry.clickHandler) {
+                    entry.anchorElement.removeEventListener('click', entry.clickHandler);
+                }
+            }
+            
             try {
                 entry.line.remove();
             } catch {
                 // ignore leader line removal failures
             }
             entry.line = null;
+            entry.mouseEnterHandler = null;
+            entry.mouseLeaveHandler = null;
+            entry.clickHandler = null;
         }
     }
 
@@ -102,7 +291,7 @@
         }
         try {
             const verified = metadata && metadata.verified;
-            return new LeaderLine(startElement, endElement, {
+            const line = new LeaderLine(startElement, endElement, {
                 color: verified ? "#73d13d" : "#ff4d4f",
                 size: 1,
                 path: "fluid",
@@ -115,6 +304,9 @@
                 startPlugColor: verified ? "#73d13d" : "#ff4d4f",
                 endPlugColor: verified ? "#52c41a" : "#ff7875",
             });
+            // Hide by default
+            line.hide('none');
+            return line;
         } catch (error) {
             console.warn("Atlas imports: failed to create leader line", error);
             return null;
@@ -187,6 +379,7 @@
             if (!currentKeys.has(key)) {
                 removeLine(entry);
                 activeLines.delete(key);
+                pinnedLines.delete(key); // Clean up pinned state
             }
         }
     }
@@ -196,6 +389,7 @@
             removeLine(entry);
         }
         activeLines.clear();
+        pinnedLines.clear();
         updateScheduled = false;
     }
 
@@ -284,6 +478,10 @@
                             line: null,
                             anchorElement: null,
                             targetElement: null,
+                            relationshipKey: relationshipKey,
+                            mouseEnterHandler: null,
+                            mouseLeaveHandler: null,
+                            clickHandler: null,
                         };
                         activeLines.set(relationshipKey, entry);
                     } else {
@@ -291,6 +489,7 @@
                         entry.targetPath = annotation.targetPath;
                         entry.anchorId = primaryAnchorId;
                         entry.metadata = metadata;
+                        entry.relationshipKey = relationshipKey;
                     }
 
                     updateEntryPosition(relationshipKey);
@@ -301,6 +500,7 @@
 
             if (activeLines.size) {
                 ensureUpdateLoop();
+                installDelegatedHandlersOnce();
             }
         },
     });
