@@ -119,24 +119,43 @@
                     anchorId = getAnchorIdFromNode(target);
                     if (!anchorId) target = target.parentElement;
                 }
-                if (!anchorId) return;
-                const shell = getShell(target);
-                if (!shell) return;
-                const editorId = (shell.getAttribute('data-editor-id') || '').toLowerCase();
-                if (!editorId) return;
+                // Case 1: hovering a source anchor span
+                if (anchorId) {
+                    const shell = getShell(target);
+                    if (!shell) return;
+                    const editorId = (shell.getAttribute('data-editor-id') || '').toLowerCase();
+                    if (!editorId) return;
 
-                for (const [key, entry] of activeLines.entries()) {
-                    const entryAnchor = (entry.anchorId || '').toLowerCase();
-                    const entrySrc = (normalizePathLike(entry.sourceUri) || '').toLowerCase();
-                    if (
-                        entryAnchor === anchorId &&
-                        (entrySrc === editorId || entrySrc.endsWith(editorId) || editorId.endsWith(entrySrc))
-                    ) {
-                        if (!pinnedLines.has(key)) {
-                            updateEntryPosition(key);
-                            if (entry.line) {
-                                try { entry.line.show('draw', { duration: 150 }); } catch {}
+                    for (const [key, entry] of activeLines.entries()) {
+                        const entryAnchor = (entry.anchorId || '').toLowerCase();
+                        const entrySrc = (normalizePathLike(entry.sourceUri) || '').toLowerCase();
+                        if (
+                            entryAnchor === anchorId &&
+                            (entrySrc === editorId || entrySrc.endsWith(editorId) || editorId.endsWith(entrySrc))
+                        ) {
+                            if (!pinnedLines.has(key)) {
+                                updateEntryPosition(key);
+                                if (entry.line) {
+                                    try { entry.line.show('draw', { duration: 150 }); } catch {}
+                                }
                             }
+                        }
+                    }
+                    return;
+                }
+
+                // Case 2: hovering a target editor titlebar (reveal incoming lines to that target)
+                let node = e.target;
+                const titlebar = node && node.closest ? node.closest('.editor-titlebar') : null;
+                if (!titlebar) return;
+                const shell = getShell(titlebar);
+                if (!shell) return;
+                for (const [key, entry] of activeLines.entries()) {
+                    if (pinnedLines.has(key)) continue;
+                    updateEntryPosition(key);
+                    if (entry.targetElement === titlebar) {
+                        if (entry.line) {
+                            try { entry.line.show('draw', { duration: 150 }); } catch {}
                         }
                     }
                 }
@@ -152,27 +171,47 @@
                     anchorId = getAnchorIdFromNode(target);
                     if (!anchorId) target = target.parentElement;
                 }
-                if (!anchorId) return;
-                const shell = getShell(target);
-                if (!shell) return;
-                const editorId = (shell.getAttribute('data-editor-id') || '').toLowerCase();
-                if (!editorId) return;
+                // Case 1: leaving a source anchor span
+                if (anchorId) {
+                    const shell = getShell(target);
+                    if (!shell) return;
+                    const editorId = (shell.getAttribute('data-editor-id') || '').toLowerCase();
+                    if (!editorId) return;
 
-                // If moving within the same anchor, ignore
+                    // If moving within the same anchor, ignore
+                    const related = e.relatedTarget;
+                    if (related && target && target.contains && target.contains(related)) return;
+
+                    for (const [key, entry] of activeLines.entries()) {
+                        const entryAnchor = (entry.anchorId || '').toLowerCase();
+                        const entrySrc = (normalizePathLike(entry.sourceUri) || '').toLowerCase();
+                        if (
+                            entryAnchor === anchorId &&
+                            (entrySrc === editorId || entrySrc.endsWith(editorId) || editorId.endsWith(entrySrc))
+                        ) {
+                            if (!pinnedLines.has(key)) {
+                                if (entry.line) {
+                                    try { entry.line.hide('draw', { duration: 150 }); } catch {}
+                                }
+                            }
+                        }
+                    }
+                    return;
+                }
+
+                // Case 2: leaving a target editor titlebar
+                let node = e.target;
+                const titlebar = node && node.closest ? node.closest('.editor-titlebar') : null;
+                if (!titlebar) return;
+                // If moving within the same titlebar, ignore
                 const related = e.relatedTarget;
-                if (related && target && target.contains && target.contains(related)) return;
+                if (related && titlebar.contains && titlebar.contains(related)) return;
 
                 for (const [key, entry] of activeLines.entries()) {
-                    const entryAnchor = (entry.anchorId || '').toLowerCase();
-                    const entrySrc = (normalizePathLike(entry.sourceUri) || '').toLowerCase();
-                    if (
-                        entryAnchor === anchorId &&
-                        (entrySrc === editorId || entrySrc.endsWith(editorId) || editorId.endsWith(entrySrc))
-                    ) {
-                        if (!pinnedLines.has(key)) {
-                            if (entry.line) {
-                                try { entry.line.hide('draw', { duration: 150 }); } catch {}
-                            }
+                    if (pinnedLines.has(key)) continue;
+                    if (entry.targetElement === titlebar) {
+                        if (entry.line) {
+                            try { entry.line.hide('draw', { duration: 150 }); } catch {}
                         }
                     }
                 }
